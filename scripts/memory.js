@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 
 /**
- * Memory API — on-demand подгрузка контекста из memory/
+ * Memory API — on-demand context loading from memory/
  *
- * Использование:
- *   node memory.js search <query>       — поиск по содержимому всех файлов
- *   node memory.js recent [n]           — последние N feedback (default: 5)
- *   node memory.js workstream <name>    — все файлы связанные с workstream
- *   node memory.js decisions [topic]    — решения (Why/How to apply блоки)
- *   node memory.js list [type]          — список файлов (workstreams|feedback|decisions|profile|reference|all)
+ * Usage:
+ *   node memory.js search <query>       — search across all files
+ *   node memory.js recent [n]           — last N feedback files (default: 5)
+ *   node memory.js workstream <name>    — all files related to a workstream
+ *   node memory.js decisions [topic]    — decisions (Why/How to apply blocks)
+ *   node memory.js list [type]          — list files (workstreams|feedback|decisions|profile|reference|all)
+ *   node memory.js docs                 — collect DOC: notes from daily notes
  */
 
 const fs = require('fs');
@@ -171,7 +172,7 @@ function printRecent(n = 5) {
 function printWorkstream(...args) {
     const { flags, positional } = parseFlags(args);
     const name = positional[0];
-    if (!name) return console.log('Usage: memory.js workstream <name> [--brief] [--only=decisions,feedback]\nAvailable: avito, ai-plan, tooling, uikit');
+    if (!name) return console.log('Usage: memory.js workstream <name> [--brief] [--only=decisions,feedback]');
     let files = queryWorkstream(name);
     files = filterByDirs(files, flags.only);
     if (!files.length) return console.log(`No files found for workstream "${name}"${flags.only ? ` (only: ${flags.only})` : ''}`);
@@ -228,7 +229,7 @@ function printList(type = 'all') {
 
 function note(...words) {
     const text = words.join(' ');
-    if (!text) return console.log('Usage: memory.js note <text>\nExample: memory.js note ai-frontend: personal skills лучше commands');
+    if (!text) return console.log('Usage: memory.js note <text>\nExample: memory.js note "auth: switched to JWT for stateless sessions"');
 
     const notesDir = DIRS.notes;
     if (!fs.existsSync(notesDir)) fs.mkdirSync(notesDir, { recursive: true });
@@ -242,11 +243,60 @@ function note(...words) {
     if (fs.existsSync(filePath)) {
         fs.appendFileSync(filePath, entry);
     } else {
-        const header = `---\nname: Notes ${today}\ndescription: Заметки сессии ${today}\ntype: project\n---\n\n# ${today}\n\n`;
+        const header = `---\nname: Notes ${today}\ndescription: Session notes ${today}\ntype: project\n---\n\n# ${today}\n\n`;
         fs.writeFileSync(filePath, header + entry);
     }
 
     console.log(`Saved to notes/${today}.md`);
+}
+
+// --- Docs ---
+
+function queryDocs() {
+    const notesDir = DIRS.notes;
+    if (!notesDir || !fs.existsSync(notesDir)) return [];
+
+    const results = [];
+    for (const entry of fs.readdirSync(notesDir).sort()) {
+        if (!entry.endsWith('.md')) continue;
+        const filePath = path.join(notesDir, entry);
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const lines = content.split('\n');
+        for (const line of lines) {
+            const match = line.match(/^- (\d{2}:\d{2}) DOC:\s*(.+)$/);
+            if (match) {
+                const [, time, text] = match;
+                const date = entry.replace('.md', '');
+                // Parse "domain — insight" or just "insight"
+                const dashIdx = text.indexOf(' — ');
+                const domain = dashIdx >= 0 ? text.slice(0, dashIdx).trim() : 'general';
+                const insight = dashIdx >= 0 ? text.slice(dashIdx + 3).trim() : text.trim();
+                results.push({ date, time, domain, insight, raw: text });
+            }
+        }
+    }
+    return results;
+}
+
+function printDocs() {
+    const docs = queryDocs();
+    if (!docs.length) return console.log('No DOC: notes found. Use: memory.js note "DOC: domain — insight"');
+
+    // Group by domain
+    const grouped = {};
+    for (const d of docs) {
+        if (!grouped[d.domain]) grouped[d.domain] = [];
+        grouped[d.domain].push(d);
+    }
+
+    console.log(`\n# DOC notes (${docs.length})\n`);
+    for (const [domain, items] of Object.entries(grouped).sort()) {
+        console.log(`## ${domain} (${items.length})`);
+        for (const item of items) {
+            console.log(`  ${item.date} ${item.time}  ${item.insight}`);
+        }
+        console.log('');
+    }
 }
 
 // --- Workstream management ---
@@ -318,6 +368,7 @@ const commands = {
     'add-workstream': addWorkstream,
     'remove-workstream': removeWorkstream,
     workstreams: listWorkstreams,
+    docs: printDocs,
     dir: () => console.log(MEMORY_DIR),
 };
 
@@ -326,18 +377,19 @@ if (require.main === module) {
     const cliArgs = process.argv.slice(2).filter(a => !a.startsWith('--dir='));
     const [cmd, ...args] = cliArgs;
     if (!cmd || !commands[cmd]) {
-        console.log('Memory API — on-demand контекст\n');
+        console.log('Memory API — on-demand context\n');
         console.log('Commands:');
-        console.log('  search <query>         — поиск по содержимому');
-        console.log('  recent [n]             — последние N feedback (default: 5)');
-        console.log('  workstream <name>      — контекст workstream');
-        console.log('  workstreams            — список всех workstreams');
-        console.log('  add-workstream <name> <keywords...>  — создать/обновить workstream');
-        console.log('  remove-workstream <name>             — удалить workstream');
-        console.log('  decisions [topic]      — решения по теме');
-        console.log('  list [type]            — список файлов');
-        console.log('  note <text>            — быстрая заметка');
-        console.log('  dir                    — путь к memory directory');
+        console.log('  search <query>         — search across all files');
+        console.log('  recent [n]             — last N feedback files (default: 5)');
+        console.log('  workstream <name>      — workstream context');
+        console.log('  workstreams            — list all workstreams');
+        console.log('  add-workstream <name> <keywords...>  — create/update workstream');
+        console.log('  remove-workstream <name>             — remove workstream');
+        console.log('  decisions [topic]      — decisions by topic');
+        console.log('  list [type]            — list files');
+        console.log('  note <text>            — quick note');
+        console.log('  docs                   — collect DOC: notes');
+        console.log('  dir                    — memory directory path');
     } else {
         commands[cmd](...args);
     }
@@ -357,4 +409,5 @@ module.exports = {
     WORKSTREAM_ALIASES,
     DIRS,
     note,
+    queryDocs,
 };

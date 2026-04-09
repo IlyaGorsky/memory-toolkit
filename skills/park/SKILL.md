@@ -1,76 +1,76 @@
 ---
 name: park
-description: Запарковать идею или задачу для следующей сессии — сохранить контекст, не потерять мысль.
+description: Park an idea or task for the next session — save context, don't lose the thought.
 user-invocable: true
-argument-hint: "[название идеи]"
+argument-hint: "[idea name]"
 ---
 
-# /park — Запарковать идею
+# /park — Park an idea
 
-Быстро сохранить идею/задачу из текущей сессии чтобы подхватить в следующей. Не закрывает сессию — только фиксирует мысль.
+Quickly save an idea/task from the current session to pick up in the next one. Does not close the session — only captures the thought.
 
-## Шаг 1: Определить что паркуем
+## Step 1: Determine what to park
 
-Из аргумента или из контекста последних сообщений определи:
+From the argument or from the context of recent messages, determine:
 
-- **Что** — суть идеи/задачи (1-2 предложения)
-- **Зачем** — какую проблему решает
-- **Workstream** — к какому направлению относится (из `workstreams.json` или новый)
-- **Контекст** — ключевые детали из текущего диалога которые потеряются без записи
+- **What** — the essence of the idea/task (1-2 sentences)
+- **Why** — what problem it solves
+- **Workstream** — which workstream it belongs to (from `workstreams.json` or a new one)
+- **Context** — key details from the current conversation that would be lost without recording
 
-Если неясно — спроси пользователя коротко.
+If unclear — ask the user briefly.
 
-## Шаг 2: Выбрать куда сохранить
+## Step 2: Choose where to save
 
-По приоритету:
+By priority:
 
-1. **Существующий файл workstream** — если идея относится к активному workstream, дописать в его файл
-2. **Новый файл в ideas** — если это новая тема:
+1. **Existing workstream file** — if the idea belongs to an active workstream, append to its file
+2. **New file in ideas** — if it's a new topic:
 
 ```markdown
 ---
-name: {краткое название}
-description: {одна строка — для поиска через memory.js}
+name: {short name}
+description: {one line — for search via memory.js}
 type: project
 ---
 
-## Что
-{суть}
+## What
+{essence}
 
-## Зачем
-{проблему решает}
+## Why
+{problem it solves}
 
-## Контекст
-{ключевые детали из диалога}
+## Context
+{key details from the conversation}
 
-## Следующий шаг
-{что делать когда вернёшься к этому}
+## Next step
+{what to do when you come back to this}
 ```
 
-3. **Быстрая заметка** — если идея сырая и нет структуры:
+3. **Quick note** — if the idea is raw and has no structure:
 
 ```bash
-node $MEM/memory.js note "{суть идеи}"
+node $MEM/memory.js note "{essence of the idea}"
 ```
 
-## Шаг 3: Обновить MEMORY.md
+## Step 3: Update MEMORY.md
 
-Если создан новый файл — добавить строку в индекс MEMORY.md.
+If a new file was created — add a line to the MEMORY.md index.
 
-## Шаг 4: Подтвердить
+## Step 4: Confirm
 
-Показать пользователю:
+Show the user:
 
 ```
-Запарковано: {название}
-Файл: {путь}
-Подхватить: /session-start {workstream}
+Parked: {name}
+File: {path}
+Pick up: /session-start {workstream}
 ```
 
-## Правила
+## Rules
 
-- Не закрывать сессию — пользователь продолжает работать
-- Не дублировать — если идея уже в backlog или memory, указать где
-- Контекст из диалога важнее формулировки — лучше записать сырым, чем потерять
-- Один park = одна идея. Если несколько — предложить запарковать по очереди
-- Если пользователь не дал аргумент — предложить последнюю обсуждавшуюся тему
+- Do not close the session — the user continues working
+- Do not duplicate — if the idea is already in backlog or memory, point out where
+- Context from the conversation matters more than wording — better to record it raw than to lose it
+- One park = one idea. If there are multiple — offer to park them one by one
+- If the user did not provide an argument — suggest the last discussed topic

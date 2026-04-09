@@ -1,23 +1,23 @@
 ---
 name: session-start
-description: Холодный старт сессии — контекст, статус, фокус. Использовать в начале каждой новой сессии.
+description: Cold session start — context, status, focus. Use at the beginning of each new session.
 user-invocable: true
 argument-hint: "[workstream]"
 ---
 
-# /session-start — Холодный старт сессии
+# /session-start — Cold session start
 
-Быстрый вход в контекст. Собрать состояние, показать что осталось, предложить фокус.
+Quick context entry. Gather state, show what's remaining, suggest focus.
 
 ---
 
-## Step 1: Memory — загрузить контекст
+## Step 1: Memory — load context
 
-Прочитать MEMORY.md (карта контекста).
+Read MEMORY.md (context map).
 
-Если передан аргумент workstream — сразу подгрузить детали и перейти к Step 3.
+If a workstream argument is provided — load details immediately and go to Step 3.
 
-Если аргумент не передан — найти memory.js для текущего проекта:
+If no argument is provided — find memory.js for the current project:
 
 ```bash
 # Resolve memory dir from cwd
@@ -33,40 +33,40 @@ fi
 MEM="$MEM_DIR/memory.js"
 ```
 
-Показать workstreams:
+Show workstreams:
 
 ```bash
 node "$MEM" workstreams
 ```
 
-Показать меню:
+Show menu:
 
 ```
 Workstreams:
-  1. pr-review — 3 файла, handoff от 2026-04-07
-  2. core — 12 файлов
-  3. ➕ Создать новый workstream
+  1. pr-review — 3 files, handoff from 2026-04-07
+  2. core — 12 files
+  3. ➕ Create new workstream
 
-Что делаем?
+What do we do?
 ```
 
-Варианты ответа:
-- Номер или имя workstream → подгрузить детали и перейти к Step 3
-- «Все» / «обзор» → показать краткий срез по каждому, потом фокус-кандидаты
-- «Новый» / номер ➕ → Step 1b: создать workstream
+Response options:
+- Number or workstream name → load details and go to Step 3
+- "All" / "overview" → show a brief snapshot for each, then focus candidates
+- "New" / ➕ number → Step 1b: create workstream
 
 ---
 
-## Step 1b: Создать новый workstream (если выбрано ➕)
+## Step 1b: Create new workstream (if ➕ selected)
 
-Спросить:
-1. **Имя**: "Как назвать workstream?" (e.g. `auth-refactor`, `mobile-fix`)
-2. **Ключевые слова**: "По каким словам искать связанные файлы?" (e.g. `auth, login, session, token`)
+Ask:
+1. **Name**: "What should the workstream be called?" (e.g. `auth-refactor`, `mobile-fix`)
+2. **Keywords**: "Which keywords to use for finding related files?" (e.g. `auth, login, session, token`)
 
-Обновить `workstreams.json`:
+Update `workstreams.json`:
 
 ```bash
-# Прочитать текущий, добавить новый, записать
+# Read current, add new, write
 node -e "
 const fs = require('fs');
 const p = '$MEM_DIR/workstreams.json';
@@ -77,19 +77,19 @@ console.log('Added workstream: {name}');
 "
 ```
 
-Создать директорию и начальный файл:
+Create directory and initial file:
 
 ```bash
 mkdir -p "$MEM_DIR/workstreams"
 ```
 
-Записать note:
+Write note:
 
 ```bash
 node "$MEM" note "NEW_WORKSTREAM: {name} keywords: {keywords}"
 ```
 
-Перейти к Step 3 с новым workstream.
+Go to Step 3 with the new workstream.
 
 ---
 
@@ -101,77 +101,77 @@ git log --oneline -5
 git branch --show-current
 ```
 
-Если есть незакоммиченные изменения — сообщить и спросить: «Закоммитить или продолжить поверх?»
-Если последний коммит >5 дней назад — отметить.
+If there are uncommitted changes — report and ask: "Commit or continue on top?"
+If the last commit was >5 days ago — note it.
 
 ---
 
 ## Step 3: Task plan
 
-Прочитать source of truth текущего workstream из MEMORY.md → Workstreams.
+Read the source of truth for the current workstream from MEMORY.md → Workstreams.
 
-Показать краткий срез:
-- Сколько задач [ ] / [x]
-- Что заблокировано
-- Что можно взять сейчас
+Show a brief snapshot:
+- How many tasks [ ] / [x]
+- What is blocked
+- What can be picked up now
 
 ---
 
-## Step 4: Фокус-кандидаты
+## Step 4: Focus candidates
 
-Формат:
+Format:
 
 ```text
-## Сессия YYYY-MM-DD
+## Session YYYY-MM-DD
 
-Git: <ветка> / чистое дерево / N uncommitted files
-Last commit: <hash> <message> (<days> дней назад)
+Git: <branch> / clean tree / N uncommitted files
+Last commit: <hash> <message> (<days> days ago)
 
-### Фокус-кандидаты
-1. <задача> — <SP> — почему сейчас
-2. <задача> — <SP> — почему сейчас
-3. <задача> — <SP> — почему сейчас
+### Focus candidates
+1. <task> — <SP> — why now
+2. <task> — <SP> — why now
+3. <task> — <SP> — why now
 ```
 
 ---
 
-## Step 5: Рекомендация модели
+## Step 5: Model recommendation
 
-Для каждого кандидата — предложить модель по типу работы:
+For each candidate — suggest a model based on work type:
 
-| Тип задачи | Модель | Почему |
+| Task type | Model | Why |
 | --- | --- | --- |
-| Планирование, архитектура, новый домен | Opus | exploration, нужен reasoning |
-| Кодинг по готовому плану, scaffold | Sonnet | execution по правилам |
-| Рутина: переводы, копирование паттерна | Haiku | дешёво, правила достаточны |
-| Ревью, анализ, рефакторинг | Sonnet/Opus | зависит от глубины |
+| Planning, architecture, new domain | Opus | exploration, reasoning needed |
+| Coding from a ready plan, scaffold | Sonnet | execution by rules |
+| Routine: translations, pattern copying | Haiku | cheap, rules are sufficient |
+| Review, analysis, refactoring | Sonnet/Opus | depends on depth |
 
-Формат: после каждого кандидата — `→ рекомендация: Sonnet (execution по паттерну)`
+Format: after each candidate — `→ recommendation: Sonnet (execution by pattern)`
 
 ---
 
 ## Step 6: Ask
 
-«Что делаем? Или выбираем из кандидатов? Модель ок или переключить?»
+"What do we do? Or pick from the candidates? Model ok or switch?"
 
 ---
 
-## Step 7: Метка сессии
+## Step 7: Session label
 
-После выбора фокуса — записать метку:
+After choosing a focus — write a label:
 
 ```bash
-node "$MEM" --dir="$MEM_DIR" note "SESSION_START branch:$(git branch --show-current) workstream:<выбранный> focus:<задача>"
+node "$MEM" --dir="$MEM_DIR" note "SESSION_START branch:$(git branch --show-current) workstream:<chosen> focus:<task>"
 ```
 
-Это позволяет `/session-restore search SESSION_START` найти все точки входа в сессии.
+This allows `/session-restore search SESSION_START` to find all session entry points.
 
 ---
 
 ## Rules
 
-- Не читать все файлы целиком — только заголовки и [ ] задачи
-- Не предлагать больше 3 кандидатов
-- Если есть заблокированные задачи (ждём макеты/бэкенд) — отметить, не предлагать
-- При аргументе workstream — сразу глубже в контекст, без общего обзора
-- Если предыдущая сессия закончилась compact — проверить что было последним действием через `/session-restore`
+- Do not read entire files — only headers and [ ] tasks
+- Do not suggest more than 3 candidates
+- If there are blocked tasks (waiting for mockups/backend) — note them, do not suggest
+- When a workstream argument is provided — go deeper into context immediately, without a general overview
+- If the previous session ended with compact — check what the last action was via `/session-restore`

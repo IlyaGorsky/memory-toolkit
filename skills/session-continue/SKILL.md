@@ -1,17 +1,17 @@
 ---
 name: session-continue
-description: Продолжить workstream с того места где остановился — быстрее чем /session-start, без выбора фокуса.
+description: Continue a workstream from where you left off — faster than /session-start, no focus selection.
 user-invocable: true
 argument-hint: "[workstream]"
 ---
 
-# /session-continue — Быстрое продолжение
+# /session-continue — Quick Continue
 
-Подхватить workstream без полного cold start. Для случаев когда ты знаешь что делаешь.
+Pick up a workstream without a full cold start. For cases when you know what you're doing.
 
 ---
 
-## Step 1: Найти handoff
+## Step 1: Find handoff
 
 ```bash
 MEM=$(find ~/.claude/projects -maxdepth 3 -name "memory.js" -path "*/memory/*" 2>/dev/null | head -1)
@@ -19,11 +19,11 @@ MEM_DIR=$(dirname "$MEM")
 cat "$MEM_DIR/workstreams/handoff.md" 2>/dev/null || echo "NO_HANDOFF"
 ```
 
-Если handoff нет → предложить `/session-start` вместо этого.
+If no handoff exists → suggest `/session-start` instead.
 
 ---
 
-## Step 2: Git status (молча)
+## Step 2: Git status (silently)
 
 ```bash
 git status --short
@@ -31,42 +31,42 @@ git log --oneline -3
 git branch --show-current
 ```
 
-Если есть незакоммиченные изменения — показать одной строкой.
-Если чистое дерево — не упоминать.
+If there are uncommitted changes — show in one line.
+If the tree is clean — don't mention it.
 
 ---
 
-## Step 3: Показать резюме
+## Step 3: Show summary
 
-Формат (максимум 10 строк):
+Format (10 lines max):
 
 ```
-## Продолжаем: {workstream}
+## Continuing: {workstream}
 
-**Где остановились:** {из handoff — последнее действие}
-**Что дальше:** {из handoff — следующий шаг}
-**Ветка:** {branch} {uncommitted count если есть}
+**Where we left off:** {from handoff — last action}
+**What's next:** {from handoff — next step}
+**Branch:** {branch} {uncommitted count if any}
 
-Начинаем?
+Shall we begin?
 ```
 
-Не показывать task plan, фокус-кандидаты, рекомендации модели — это для `/session-start`.
+Don't show task plan, focus candidates, model recommendations — that's for `/session-start`.
 
 ---
 
-## Step 4: Подгрузить контекст по запросу
+## Step 4: Load context on demand
 
-Если пользователь подтвердил — загрузить только то что нужно для следующего шага:
+If the user confirmed — load only what's needed for the next step:
 
-- Файл который редактировали последним
-- Task plan если есть
-- Последние 3 feedback через `node $MEM search`
+- The file that was last edited
+- Task plan if available
+- Last 3 feedback entries via `node $MEM search`
 
-НЕ грузить весь memory — только релевантное.
+Do NOT load the entire memory — only what's relevant.
 
 ---
 
-## Step 5: Метка
+## Step 5: Mark
 
 ```bash
 node $MEM_DIR/memory.js note "SESSION_CONTINUE branch:$(git branch --show-current) workstream:{name}"
@@ -76,7 +76,7 @@ node $MEM_DIR/memory.js note "SESSION_CONTINUE branch:$(git branch --show-curren
 
 ## Rules
 
-- Максимальная скорость — 10 строк вывода, потом работа
-- Не спрашивать модель, не показывать кандидатов — пользователь уже знает
-- Если handoff старше 7 дней — предупредить: "Handoff от {дата}, контекст мог устареть. /session-start для полного обзора?"
-- Если аргумент не передан — взять workstream из последнего handoff
+- Maximum speed — 10 lines of output, then get to work
+- Don't ask about the model, don't show candidates — the user already knows
+- If handoff is older than 7 days — warn: "Handoff from {date}, context may be stale. /session-start for a full overview?"
+- If no argument is passed — take the workstream from the latest handoff

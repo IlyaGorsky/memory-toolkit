@@ -1,31 +1,41 @@
 ---
 name: session-insights
-description: Извлечь инсайты из .jsonl сессий через llm-runner — проблемы, решения, friction по тикетам.
+description: Extract insights from past .jsonl sessions — problems, decisions, friction points. Analyzes sessions you can't see in current context.
 user-invocable: true
 argument-hint: "[ticket|session-id|workstream]"
 ---
 
-# /session-insights — Извлечение инсайтов из истории сессий
+# /session-insights — Extract insights from past sessions
 
-Парсит `.jsonl` файлы сессий, извлекает user-сообщения, прогоняет через llm-runner (Haiku) для structured output.
+Parse `.jsonl` session transcripts and extract structured insights: problems, decisions, patterns, friction points. Works on sessions outside the current context.
 
-## Шаг 1: Найти сессии
+## Step 1: Find sessions
 
-По аргументу определи scope:
-
-- **Тикет** (`HH-301562`) — grep по всем `.jsonl` файлам, найти сессии где упоминается тикет
-- **Session ID** — конкретный файл
-- **Workstream** — использовать `node $MEM/memory.js workstream <name>` для контекста, найти связанные сессии по датам/ключевым словам
-- **Без аргумента** — последняя сессия
+Resolve memory directory, then find sessions by argument:
 
 ```bash
-SESSIONS_DIR=~/.claude/projects/-$(pwd | tr '/' '-' | sed 's/^-//')/
+GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+PROJ_KEY=$(echo "$GIT_ROOT" | tr '/.' '-' | sed 's/^-//')
+SESSIONS_DIR="$HOME/.claude/projects/-${PROJ_KEY}/"
+```
+
+- **Ticket/keyword** — grep across all `.jsonl` files
+- **Session ID** — specific file by UUID
+- **Workstream** — use `node "$MEM" --dir="$MEM_DIR" workstream <name>` for context, match by dates/keywords
+- **No argument** — most recent session
+
+```bash
 grep -l "<query>" "$SESSIONS_DIR"*.jsonl 2>/dev/null | head -10
 ```
 
-## Шаг 2: Извлечь user-сообщения
+Also check session index if available:
+```bash
+cat "$MEM_DIR/sessions.jsonl" 2>/dev/null
+```
 
-Для каждой найденной сессии:
+## Step 2: Extract user messages
+
+For each session found:
 
 ```python
 import json, sys
@@ -51,46 +61,46 @@ with open(sys.argv[1]) as f:
             pass
 ```
 
-## Шаг 3: Отправить в llm-runner
+## Step 3: Analyze
 
-Если llm-runner доступен (`node ~/Desktop/projects/llm-runner/llm/index.js` или `scripts/llm/index.js`):
+Extract structured insights from the user messages:
 
-```bash
-node ~/Desktop/projects/llm-runner/llm/index.js --tier fast --json <<EOF
-Извлеки из диалога разработчика с AI-агентом:
+1. **Problems** — what didn't work, was redone, caused friction
+2. **Decisions** — what was chosen and why (architectural, process)
+3. **Insights** — non-obvious conclusions, patterns, reassessments
+4. **Friction points** — where the agent repeatedly failed, what required many iterations
 
-1. **Проблемы** — что не получилось, переделывалось, вызвало friction
-2. **Решения** — что выбрали и почему (архитектурные, процессные)
-3. **Инсайты** — неочевидные выводы, паттерны, переоценки
-4. **Friction points** — где AI ошибался повторно, что требовало много итераций
+Format:
 
-Диалог:
-${USER_MESSAGES}
+```
+## Session insights: <date range or session id>
 
-Ответь JSON:
-{
-  "problems": [{"description": "...", "resolution": "..."}],
-  "decisions": [{"what": "...", "why": "..."}],
-  "insights": [{"insight": "...", "evidence": "..."}],
-  "friction": [{"what": "...", "count": N, "root_cause": "..."}]
-}
-EOF
+### Problems
+- <description> → <resolution or status>
+
+### Decisions
+- <what> — <why>
+
+### Insights
+- <insight> — <evidence from session>
+
+### Friction
+- <what> (×N iterations) — <root cause>
 ```
 
-Если llm-runner недоступен — проанализировать самостоятельно (медленнее, но работает).
+## Step 4: Save
 
-## Шаг 4: Показать и сохранить
+Ask the user:
 
-Показать пользователю structured output. Спросить:
+- "Save insights to memory?" → create files in `feedback/` or `decisions/`
+- "Add friction points to backlog?" → append to `backlog.md`
+- "Mark as DOC:?" → `node "$MEM" --dir="$MEM_DIR" note "DOC: <domain> — <insight>"` for /docs-reflect
+- "Skip" → display only
 
-- «Сохранить инсайты в memory?» → feedback/ или decisions/
-- «Добавить friction в backlog?» → backlog.md items
-- «Пропустить» → только показать
+## Rules
 
-## Правила
-
-- Фильтровать системные сообщения, ide_opened_file, tool calls — только USER текст
-- Большие сессии (>50KB user text) — разбить на chunks по 4K токенов
-- Не показывать сырой JSON — форматировать в читаемые блоки
-- Если по тикету найдено несколько сессий — объединить хронологически
-- Haiku достаточно для extraction — не тратить на Opus
+- Filter system messages, ide_opened_file, tool calls — only USER text
+- Large sessions (>50KB user text) — split into chunks
+- Don't dump raw output — format into readable blocks
+- If multiple sessions found for a query — combine chronologically
+- If session index (`sessions.jsonl`) exists — use it for faster lookup

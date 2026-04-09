@@ -74,4 +74,18 @@ fs.appendFileSync(sessionsPath, record);
 const handoffPath = path.join(memoryDir, 'workstreams', 'handoff.md');
 if (fs.existsSync(handoffPath)) {
   process.stdout.write(fs.readFileSync(handoffPath, 'utf8'));
+  process.stdout.write('\n');
 }
+
+// Remind agent to track documentation-worthy findings
+process.stdout.write([
+  '---',
+  'During this session, mark documentation-worthy findings:',
+  '  /memory note "DOC: <domain> — <insight>"',
+  'Examples:',
+  '  /memory note "DOC: testing — integration tests must hit real DB, not mocks"',
+  '  /memory note "DOC: architecture — webhook handlers must be idempotent"',
+  'At session end, /docs-reflect will collect DOC: notes and propose repo documentation.',
+  '---',
+  '',
+].join('\n'));

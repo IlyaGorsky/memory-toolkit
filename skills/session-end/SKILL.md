@@ -1,57 +1,93 @@
 ---
 name: session-end
-description: Завершение сессии — сохранить state, подготовить handoff для следующей сессии.
+description: Session completion — handoff, reflect, docs-reflect cascade.
 user-invocable: true
 argument-hint: ""
 ---
 
-# /session-end — Handoff для следующей сессии
+# /session-end — Handoff for the next session
 
-Сохранить контекст перед завершением или compact.
+Save context before finishing. Three phases: handoff → reflect → docs-reflect.
 
-## Step 1: Обновить MEMORY.md
+## Phase 1: Handoff
 
-Проверить что актуально:
-- Profile — без изменений?
-- Rules — новые договорённости?
-- Reference — новые ссылки?
+### 1a: Update MEMORY.md
 
-## Step 2: Записать handoff
+Check what is current:
+- Profile — no changes?
+- Rules — new agreements?
+- Reference — new links?
 
-Создать/обновить `workstreams/handoff.md`:
+### 1b: Write handoff
+
+Create/update `workstreams/handoff.md`:
 
 ```markdown
 ---
 name: Session handoff
-description: Контекст для старта следующей сессии
+description: Context for starting the next session
 type: project
 ---
 
-## Последняя сессия: YYYY-MM-DD
+## Last session: YYYY-MM-DD
 
-### Что делали
-- <список>
+### What was done
+- <list>
 
-### Где остановились
-- <текущее состояние>
+### Where we stopped
+- <current state>
 
-### Что дальше
-1. <задача> — <SP> → рекомендация: <модель>
-2. <задача> — <SP> → рекомендация: <модель>
+### What's next
+1. <task> → recommendation: <model>
+2. <task> → recommendation: <model>
 
-### Незакоммиченные изменения
-- <git status кратко, или "чистое дерево">
+### Uncommitted changes
+- <git status summary, or "clean tree">
 
-### Решения сессии
-- <новые договорённости, если были>
+### Session decisions
+- <new agreements, if any>
 ```
 
-## Step 3: Сообщить
+## Phase 2: Reflect
 
-«State сохранён. Можно закрыть сессию. При старте новой — /session-start подхватит контекст.»
+Session analysis — run /reflect:
+
+1. Check backlog.md — what's closed, what's new
+2. Find workarounds, repetitions, gaps, insights
+3. Show to user, wait for confirmation
+4. Write to backlog + memory
+
+## Phase 3: Docs-reflect
+
+Check DOC: labels from the session:
+
+```bash
+node "$MEM" --dir="$MEM_DIR" docs
+```
+
+If DOC: labels found — run /docs-reflect:
+1. Collect and group DOC: labels
+2. Generalize, determine target files
+3. Show to user, wait for confirmation
+4. Write to `.claude/rules/` or `docs/`
+
+If no DOC: labels — skip, report: "No documentation findings this session."
+
+## Phase 4: Report
+
+```
+Session complete:
+  ✓ Handoff saved to workstreams/handoff.md
+  ✓ Reflect: N items → backlog.md
+  ✓ Docs: N rules → .claude/rules/ (or: no DOC: notes)
+  
+On next start — /session-start will pick up the context.
+```
 
 ## Rules
 
-- Handoff = краткий, 20-30 строк максимум
-- Рекомендация модели — по типу следующей задачи
-- Если нечего сохранять — сказать это, не создавать пустой handoff
+- Handoff = concise, 20-30 lines maximum
+- Model recommendation — based on the type of the next task
+- If there's nothing to save — say so, don't create an empty handoff
+- Phases 2 and 3 can be skipped if the user requests a quick finish
+- Each phase requires user confirmation before writing

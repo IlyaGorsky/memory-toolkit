@@ -99,6 +99,14 @@ describe('session-log.js', () => {
     assert.ok(output.includes('Last session: did stuff'));
   });
 
+  it('outputs DOC reminder', () => {
+    const output = run({ session_id: 'sess-004' }, ctx.cwd);
+
+    assert.ok(output.includes('DOC:'));
+    assert.ok(output.includes('/memory note'));
+    assert.ok(output.includes('/docs-reflect'));
+  });
+
   it('handles missing stdin gracefully', () => {
 
     const result = execSync(`echo '{}' | node "${SCRIPT}"`, {

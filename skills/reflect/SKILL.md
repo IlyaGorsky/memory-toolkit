@@ -58,6 +58,16 @@ Also save insights to memory:
 node "$MEM" note "REFLECT: <key insight from session>"
 ```
 
+## 5. Check DOC: notes
+
+```bash
+node "$MEM" --dir="$MEM_DIR" docs
+```
+
+If DOC: notes exist — notify user: "Found N documentation findings. Run /docs-reflect to process them, or /session-end will handle it."
+
+If called from /session-end — pass control to /docs-reflect automatically.
+
 ## Rules
 
 - Don't duplicate what's already in backlog

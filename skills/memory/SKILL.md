@@ -38,9 +38,9 @@ Bootstrap for this project:
 
 1. Create memory dir: `mkdir -p "$MEM_DIR"`
 2. Copy memory.js from plugin: `cp "${CLAUDE_PLUGIN_ROOT:-~/.claude/scripts}/memory.js" "$MEM_DIR/"` (or from another project's memory dir)
-3. Ask: "Какие workstreams у проекта?" → create `workstreams.json`
-4. Ask: "Опиши свою роль в 1-2 предложениях" → Profile
-5. Ask: "Ключевые ссылки?" → Reference
+3. Ask: "What workstreams does the project have?" → create `workstreams.json`
+4. Ask: "Describe your role in 1-2 sentences" → Profile
+5. Ask: "Key links?" → Reference
 6. Create MEMORY.md:
 
 ```markdown
@@ -87,7 +87,7 @@ node {MEM_DIR}/memory.js <command>
 ```
 
 7. Verify: `node "$MEM" --dir="$MEM_DIR" list`
-8. "Memory ready. Можешь работать — `/memory` для lookup."
+8. "Memory ready. You can start working — `/memory` for lookup."
 
 ---
 

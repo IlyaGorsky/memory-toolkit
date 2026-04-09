@@ -1,44 +1,44 @@
 ---
 name: session-restore
-description: Восстановление контекста из .jsonl бэкапов сессий. Парсит историю, строит хронологию, сохраняет ключевые решения в memory.
+description: Context restoration from .jsonl session backups. Parses history, builds chronology, saves key decisions to memory.
 user-invocable: true
 argument-hint: "[backup|restore|list|search <query>]"
 ---
 
-# Session Restore — бэкап и восстановление контекста
+# Session Restore — backup and context restoration
 
-Парсит `.jsonl` файлы сессий Claude Code, извлекает хронологию и ключевые решения.
+Parses `.jsonl` files of Claude Code sessions, extracts chronology and key decisions.
 
-## Где лежат данные
+## Where data is stored
 
 ```
 ~/.claude/projects/-<project-key>/
-├── <UUID>.jsonl          # текущая сессия (или завершённая)
-├── <UUID>.jsonl.bak      # бэкап до последнего compact
+├── <UUID>.jsonl          # current session (or completed)
+├── <UUID>.jsonl.bak      # backup before last compact
 └── <UUID>/
-    └── subagents/        # логи субагентов
+    └── subagents/        # subagent logs
 ```
 
-## Команды
+## Commands
 
 ### `/session-restore list`
 
-Показать все сессии с датами и размерами:
+Show all sessions with dates and sizes:
 
 ```bash
 SESSIONS_DIR=~/.claude/projects/-$(pwd | tr '/.' '-' | sed 's/^-//')
 ls -lat "$SESSIONS_DIR"/*.jsonl 2>/dev/null | head -20
 ```
 
-Вывести таблицу:
-| Файл | Дата | Размер | .bak |
+Output a table:
+| File | Date | Size | .bak |
 
 ### `/session-restore restore`
 
-Восстановить контекст из последней (или указанной) сессии:
+Restore context from the latest (or specified) session:
 
-1. **Найди файл** — по умолчанию самый свежий `.jsonl`, или по UUID из аргумента
-2. **Парси** — извлеки USER и CLAUDE сообщения с помощью python3:
+1. **Find the file** — by default the most recent `.jsonl`, or by UUID from the argument
+2. **Parse** — extract USER and CLAUDE messages using python3:
 
 ```python
 import json, sys
@@ -76,101 +76,101 @@ for i, line in enumerate(lines):
         pass
 ```
 
-3. **Сгруппируй по блокам** — определи тематические блоки сессии (по смене темы)
-4. **Покажи пользователю** краткую хронологию:
+3. **Group into blocks** — identify thematic blocks of the session (by topic changes)
+4. **Show the user** a brief chronology:
 
 ```
-## Восстановление сессии <UUID>
-Дата: <дата файла>
-Строк: <N>
+## Session restoration <UUID>
+Date: <file date>
+Lines: <N>
 
-### Блок 1: <тема>
-- <что делали>
-- <ключевые решения>
+### Block 1: <topic>
+- <what was done>
+- <key decisions>
 
-### Блок N: <тема>
-- <что делали>
-- **Последнее действие:** <что было в момент завершения/краша>
+### Block N: <topic>
+- <what was done>
+- **Last action:** <what was happening at the moment of termination/crash>
 ```
 
-5. **Найди причину завершения** — проверь последние 20 строк:
-   - `API Error` → краш, укажи причину
-   - `context` summary → compact, контекст был сжат
-   - Обычное завершение → пользователь закрыл
+5. **Find the termination reason** — check the last 20 lines:
+   - `API Error` — crash, specify the reason
+   - `context` summary — compact, context was compressed
+   - Normal termination — user closed the session
 
 ### `/session-restore backup`
 
-Сохранить текущее состояние сессии в memory:
+Save current session state to memory:
 
-1. Определи текущую задачу (из todo, plan, или контекста)
-2. Запиши в memory файл `project_session_snapshot.md`:
+1. Identify the current task (from todo, plan, or context)
+2. Write to memory file `project_session_snapshot.md`:
 
 ```markdown
 ---
 name: Session snapshot
-description: Снимок состояния сессии на <дата>
+description: Session state snapshot as of <date>
 type: project
 ---
 
-## Задача
-<что делаем>
+## Task
+<what we are doing>
 
-## Сделано
-- <список>
+## Done
+- <list>
 
-## В процессе
-- <текущий шаг>
+## In progress
+- <current step>
 
-## Осталось
-- <список>
+## Remaining
+- <list>
 
-## Ключевые решения
-- <решения которые влияют на дальнейшую работу>
+## Key decisions
+- <decisions that affect further work>
 ```
 
-3. Обнови MEMORY.md если нужно
+3. Update MEMORY.md if needed
 
 ### `/session-restore search <query>`
 
-Поиск конкретного момента в истории сессий:
+Search for a specific moment in session history:
 
-1. **Найди файл** — самый свежий `.jsonl` (или `.jsonl.bak` для до-compact истории)
-2. **Grep** — быстрый поиск по jsonl без полного парсинга:
+1. **Find the file** — the most recent `.jsonl` (or `.jsonl.bak` for pre-compact history)
+2. **Grep** — quick search through jsonl without full parsing:
 
 ```bash
 grep -i "<query>" "$SESSIONS_DIR"/*.jsonl | head -30
 ```
 
-3. **Контекст** — для каждого найденного фрагмента покажи ±5 строк вокруг (чтобы понять тему):
+3. **Context** — for each found fragment, show ±5 lines around it (to understand the topic):
 
 ```bash
 grep -n -i "<query>" <file> | head -10
-# для каждого номера строки:
+# for each line number:
 sed -n '<line-5>,<line+5>p' <file>
 ```
 
-4. **Парси найденное** — извлеки текст из JSON, отфильтруй системные сообщения
-5. **Покажи результат**:
+4. **Parse the results** — extract text from JSON, filter out system messages
+5. **Show the result**:
 
 ```
-## Поиск: "<query>" в <файл>
-Найдено: N совпадений
+## Search: "<query>" in <file>
+Found: N matches
 
-### Совпадение 1 (строка N)
-USER: <текст>
-CLAUDE: <текст>
+### Match 1 (line N)
+USER: <text>
+CLAUDE: <text>
 
-### Совпадение 2 (строка N)
+### Match 2 (line N)
 ...
 ```
 
-6. Если результатов много (>10) — показать первые 5 и спросить «показать ещё?»
-7. Если в `.jsonl` не нашлось — проверить `.jsonl.bak`
+6. If there are many results (>10) — show the first 5 and ask "show more?"
+7. If not found in `.jsonl` — check `.jsonl.bak`
 
-## Правила
+## Rules
 
-- При restore НЕ показывай системные сообщения, ide_opened_file, tool calls — только USER и CLAUDE текст
-- Группируй по темам, не по строкам — пользователю нужна картина, а не лог
-- Если `.bak` существует — он содержит полную историю до compact, `.jsonl` может содержать compact summary
-- При backup не дублируй то что уже в memory файлах — сохраняй только то чего нет
-- Большие сессии (>10K строк) парси порциями через offset
+- During restore DO NOT show system messages, ide_opened_file, tool calls — only USER and CLAUDE text
+- Group by topics, not by lines — the user needs the big picture, not a log
+- If `.bak` exists — it contains the full history before compact, `.jsonl` may contain a compact summary
+- During backup do not duplicate what is already in memory files — only save what is missing
+- For large sessions (>10K lines) parse in chunks using offset

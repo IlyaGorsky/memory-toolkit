@@ -180,8 +180,56 @@ describe('memory.js', () => {
 
       const result = run('recent 1');
 
-      // Should show at least one feedback file
       assert.ok(result.includes('.md'));
+    });
+  });
+
+  describe('docs', () => {
+    it('collects DOC: notes from daily notes', () => {
+      writeFile('notes/2026-04-09.md', '---\nname: Notes\ntype: project\n---\n\n# 2026-04-09\n\n- 14:30 DOC: testing — integration tests must hit real DB\n- 14:35 some other note\n- 15:00 DOC: api — webhook handlers must be idempotent\n');
+
+      const result = run('docs');
+
+      assert.ok(result.includes('testing'));
+      assert.ok(result.includes('integration tests must hit real DB'));
+      assert.ok(result.includes('api'));
+      assert.ok(result.includes('webhook handlers must be idempotent'));
+    });
+
+    it('groups by domain', () => {
+      writeFile('notes/2026-04-09.md', '---\nname: Notes\ntype: project\n---\n\n- 10:00 DOC: testing — rule one\n- 11:00 DOC: testing — rule two\n- 12:00 DOC: api — rule three\n');
+
+      const result = run('docs');
+
+      assert.ok(result.includes('testing (2)'));
+      assert.ok(result.includes('api (1)'));
+    });
+
+    it('returns message when no DOC: notes', () => {
+      writeFile('notes/2026-04-09.md', '---\nname: Notes\ntype: project\n---\n\n- 10:00 regular note\n');
+
+      const result = run('docs');
+
+      assert.ok(result.includes('No DOC:'));
+    });
+
+    it('collects from multiple days', () => {
+      writeFile('notes/2026-04-08.md', '---\nname: Notes\ntype: project\n---\n\n- 10:00 DOC: architecture — decision from yesterday\n');
+      writeFile('notes/2026-04-09.md', '---\nname: Notes\ntype: project\n---\n\n- 14:00 DOC: architecture — decision from today\n');
+
+      const result = run('docs');
+
+      assert.ok(result.includes('decision from yesterday'));
+      assert.ok(result.includes('decision from today'));
+    });
+
+    it('handles DOC: without domain separator', () => {
+      writeFile('notes/2026-04-09.md', '---\nname: Notes\ntype: project\n---\n\n- 10:00 DOC: some general insight\n');
+
+      const result = run('docs');
+
+      assert.ok(result.includes('general'));
+      assert.ok(result.includes('some general insight'));
     });
   });
 });

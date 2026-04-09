@@ -184,6 +184,7 @@ There are great memory tools out there. They solve different problems.
 | Storage | SQLite + AI compression | ChromaDB + embeddings | Markdown files (human-readable) |
 | Dependencies | Node.js, SQLite, worker | Python, ChromaDB | None (built-in Node.js) |
 | Auto-capture | Full (hooks capture all tool use) | Manual (`mine` command) | Hooks (compact, commit, session start) |
+| Session history search | Compressed observations | Semantic (vector) | Grep across .jsonl transcripts |
 | Session lifecycle | No | No | Yes — start, continue, end, handoff |
 | Workstreams | No | Wings/halls/rooms | Yes — switch context, keep each isolated |
 | Works offline | Yes | Yes | Yes |
