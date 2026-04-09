@@ -94,6 +94,28 @@ With plugin — hooks auto-save before compact:
       └── found: full context from that moment
 ```
 
+### Use case 4: Look into past sessions
+
+Claude Code keeps `.jsonl` logs of every session but can't read them itself. This plugin can:
+
+```
+  /session-restore list
+    → shows all past sessions with dates and sizes
+
+  /session-restore search "why did we choose PostgreSQL"
+    → greps across .jsonl files, parses results
+
+  /session-restore restore
+    → rebuilds timeline from last session:
+        Block 1: discussed auth architecture
+        Block 2: implemented token refresh
+        Block 3: fixed test flake ← crashed here
+
+  /session-insights
+    → patterns across sessions:
+        "auth tests failed 3 times this week — same mock issue"
+```
+
 ### Memory structure
 
 ```
