@@ -28,6 +28,9 @@ Claude Code forgets everything between sessions. You start fresh every time — 
 | `/reflect` | Session reflection — what happened, what to improve |
 | `/session-insights` | Extract patterns from .jsonl session backups |
 | `/session-restore` | Recover context from past sessions |
+| `/docs-reflect` | Extract session knowledge into repo documentation |
+
+All skills are also available with the plugin namespace prefix: `/memory-toolkit:session-start`, `/memory-toolkit:memory`, etc. Use namespaced names to avoid conflicts with other plugins.
 
 ## How it works
 
@@ -153,8 +156,8 @@ All files are markdown. Human-readable, git-friendly, portable.
 | Event | Action |
 |-------|--------|
 | **PreCompact** | Auto-save session state before context compaction |
-| **PostToolUse** (git commit) | Log commits to daily notes |
-| **SessionStart** | Show handoff from previous session |
+| **PostToolUse** (git commit) | Log commits to daily notes (triggers when Claude Code runs `git commit`, not manual terminal commits) |
+| **SessionStart** | Log session ID, show handoff, display DOC: reminder |
 
 ## Install
 
