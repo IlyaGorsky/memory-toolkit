@@ -1,0 +1,77 @@
+#!/usr/bin/env node
+// Log session start to daily notes.
+// Called by SessionStart hook — reads session_id and transcript_path from stdin JSON.
+
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+
+// Read stdin (hook passes JSON)
+let stdin = '';
+try {
+  stdin = fs.readFileSync('/dev/stdin', 'utf8');
+} catch {}
+
+let sessionId = 'unknown';
+let transcriptPath = '';
+try {
+  const data = JSON.parse(stdin);
+  sessionId = data.session_id || 'unknown';
+  transcriptPath = data.transcript_path || '';
+} catch {}
+
+// Find memory dir for current project
+const cwd = process.cwd();
+const projectKey = cwd.replace(/[/.]/g, '-').replace(/^-/, '');
+let memoryDir = path.join(
+  process.env.HOME, '.claude', 'projects', `-${projectKey}`, 'memory'
+);
+
+if (!fs.existsSync(memoryDir)) {
+  const parts = cwd.split('/');
+  let found = null;
+  for (let i = parts.length; i > 2; i--) {
+    const key = parts.slice(1, i).join('-');
+    const dir = path.join(process.env.HOME, '.claude', 'projects', `-${key}`, 'memory');
+    if (fs.existsSync(dir)) { found = dir; break; }
+  }
+  if (!found) process.exit(0);
+  memoryDir = found;
+}
+
+// Get git info
+let branch = '';
+try {
+  branch = execSync('git branch --show-current', { cwd, encoding: 'utf8' }).trim();
+} catch {}
+
+// Log to daily notes
+const notesDir = path.join(memoryDir, 'notes');
+fs.mkdirSync(notesDir, { recursive: true });
+
+const today = new Date().toISOString().slice(0, 10);
+const notePath = path.join(notesDir, `${today}.md`);
+const time = new Date().toTimeString().slice(0, 5);
+const entry = `- ${time} SESSION_START uuid:${sessionId} branch:${branch}${transcriptPath ? ` transcript:${transcriptPath}` : ''}\n`;
+
+if (fs.existsSync(notePath)) {
+  fs.appendFileSync(notePath, entry);
+} else {
+  fs.writeFileSync(notePath, `---\nname: Notes ${today}\ndescription: Session notes ${today}\ntype: project\n---\n\n# ${today}\n\n${entry}`);
+}
+
+// Also write session index for quick lookup
+const sessionsPath = path.join(memoryDir, 'sessions.jsonl');
+const record = JSON.stringify({
+  id: sessionId,
+  date: new Date().toISOString(),
+  branch,
+  transcript: transcriptPath,
+}) + '\n';
+fs.appendFileSync(sessionsPath, record);
+
+// Output handoff to stdout (shown to user via hook)
+const handoffPath = path.join(memoryDir, 'workstreams', 'handoff.md');
+if (fs.existsSync(handoffPath)) {
+  process.stdout.write(fs.readFileSync(handoffPath, 'utf8'));
+}

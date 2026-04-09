@@ -7,9 +7,17 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
+// Read stdin (hook passes JSON with session_id)
+let sessionId = 'unknown';
+try {
+  const stdin = fs.readFileSync('/dev/stdin', 'utf8');
+  const data = JSON.parse(stdin);
+  sessionId = data.session_id || 'unknown';
+} catch {}
+
 // Find memory dir for current project
 const cwd = process.cwd();
-const projectKey = cwd.replace(/\//g, '-').replace(/^-/, '');
+const projectKey = cwd.replace(/[/.]/g, '-').replace(/^-/, '');
 const memoryDir = path.join(
   process.env.HOME, '.claude', 'projects', `-${projectKey}`, 'memory'
 );
@@ -52,6 +60,7 @@ type: project
 
 ## Pre-compact snapshot: ${now}
 
+**Session:** ${sessionId}
 **Branch:** ${branch}
 **Last commit:** ${lastCommit}
 **Uncommitted files:** ${uncommitted}
@@ -67,7 +76,7 @@ fs.mkdirSync(notesDir, { recursive: true });
 const today = new Date().toISOString().slice(0, 10);
 const notePath = path.join(notesDir, `${today}.md`);
 const time = new Date().toTimeString().slice(0, 5);
-const entry = `- ${time} PRE_COMPACT branch:${branch} commit:${lastCommit} uncommitted:${uncommitted}\n`;
+const entry = `- ${time} PRE_COMPACT uuid:${sessionId} branch:${branch} commit:${lastCommit} uncommitted:${uncommitted}\n`;
 
 if (fs.existsSync(notePath)) {
   fs.appendFileSync(notePath, entry);

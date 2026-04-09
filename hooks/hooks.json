@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'MEM_DIR=$(node ${CLAUDE_PLUGIN_ROOT}/scripts/memory.js dir 2>/dev/null); cat \"$MEM_DIR/workstreams/handoff.md\" 2>/dev/null'"
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/session-log.js"
           }
         ]
       }
