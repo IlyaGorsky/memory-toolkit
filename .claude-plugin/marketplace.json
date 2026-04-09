@@ -1,0 +1,11 @@
+{
+  "name": "memory-toolkit",
+  "owner": { "name": "Ilya Gorsky" },
+  "plugins": [
+    {
+      "name": "memory-toolkit",
+      "source": "./",
+      "description": "Session memory lifecycle for developers — structured markdown memory, workstreams, handoff, auto-save hooks."
+    }
+  ]
+}

@@ -1,0 +1,115 @@
+# Installation
+
+## Option 1: Marketplace (when available)
+
+```bash
+claude plugin install memory-toolkit
+```
+
+## Option 2: Local marketplace
+
+Clone the repo and register it as a local marketplace:
+
+```bash
+git clone https://github.com/igorsky/memory-toolkit.git
+claude plugin marketplace add /path/to/memory-toolkit
+claude plugin install memory-toolkit
+```
+
+The plugin will load automatically in every session.
+
+## Option 3: Per-session
+
+Load for a single session without installing:
+
+```bash
+claude --plugin-dir /path/to/memory-toolkit
+```
+
+## Option 4: Manual copy
+
+Copy skills and hooks into your Claude Code config manually:
+
+```bash
+# Skills
+cp -r skills/* ~/.claude/skills/
+
+# Hooks — merge into your existing settings
+# Add the contents of hooks/hooks.json to ~/.claude/settings.json under "hooks"
+# Replace ${CLAUDE_PLUGIN_ROOT} with the actual path to the repo:
+#   node /path/to/memory-toolkit/scripts/session-save.js
+#   node /path/to/memory-toolkit/scripts/memory.js ...
+```
+
+With manual copy, `${CLAUDE_PLUGIN_ROOT}` is not available — you must use absolute paths in hook commands.
+
+## Existing auto-memory users
+
+If you already have Claude Code's auto-memory (`~/.claude/projects/*/memory/MEMORY.md`), the plugin works with your existing files — nothing is lost or overwritten.
+
+### What the plugin adds
+
+The plugin provides skills (`/session-start`, `/memory`, `/reflect`, etc.) and hooks that use `memory.js` — a CLI tool for searching, filtering, and managing memory files. Your existing `.md` files and `MEMORY.md` index remain the source of truth.
+
+### Setup for an existing project
+
+1. **Run `/memory`** in your project — the skill auto-detects the memory directory and bootstraps `memory.js` if missing.
+
+   Or copy manually:
+   ```bash
+   # Find your project's memory dir
+   PROJ_KEY=$(git rev-parse --show-toplevel | tr '/.' '-' | sed 's/^-//')
+   MEM_DIR="$HOME/.claude/projects/-${PROJ_KEY}/memory"
+
+   # Copy memory.js
+   cp /path/to/memory-toolkit/scripts/memory.js "$MEM_DIR/"
+   ```
+
+2. **Add the API block** to the top of your MEMORY.md (after the heading):
+   ```markdown
+   ## API
+   ```bash
+   node ~/.claude/projects/-Your-Project-Key/memory/memory.js <command>
+   ```
+   ```
+   This tells Claude how to call the memory API in future sessions.
+
+3. **(Optional) Create workstreams.json** if you want workstream support:
+   ```bash
+   cd "$MEM_DIR"
+   node memory.js add-workstream my-feature keyword1 keyword2
+   ```
+
+4. **(Optional) Organize files into subdirectories** for better filtering:
+   ```
+   memory/
+   ├── MEMORY.md
+   ├── memory.js
+   ├── workstreams.json
+   ├── feedback/
+   ├── decisions/
+   ├── profile/
+   ├── reference/
+   ├── notes/
+   └── workstreams/
+   ```
+   Existing flat `.md` files continue to work — subdirectories are optional but improve `memory.js list <type>` filtering.
+
+### What stays the same
+
+- Auto-memory still writes to the same directory
+- MEMORY.md is still loaded into every conversation
+- Your existing frontmatter format (`name`, `description`, `type`) is compatible
+- Nothing is migrated or moved automatically
+
+## Verify
+
+After installation, start a new Claude Code session and check:
+
+```bash
+# Skills should appear in /help
+/memory search test
+
+# Plugin should be listed
+claude plugin list
+```
