@@ -108,9 +108,16 @@ cp /path/to/memory-toolkit/scripts/memory.js "$MEM_DIR/"
 
 ### 4b: Update MEMORY.md
 
-Read current MEMORY.md. Add missing blocks **at the top** (after the first heading), preserving everything else:
+Read current MEMORY.md. Ensure the structure follows this order:
 
-**API block** (add if missing):
+1. **Heading** (first line)
+2. **API block** (lines 3-6) — always near the top
+3. **Rules block** (lines 8-30) — always before index entries
+4. **Index entries** — the rest of the file
+
+This order matters: Claude Code truncates MEMORY.md after 200 lines. By keeping API and Rules at the top, they survive truncation even if auto-memory adds many index entries.
+
+**API block** (add if missing, right after heading):
 ```markdown
 ## API
 ```bash
@@ -118,7 +125,7 @@ node {MEM_DIR}/memory.js <command>
 ```
 ```
 
-**Rules block** (add if missing, at the end before any existing content that should stay last):
+**Rules block** (add if missing, after API and before index entries):
 ```markdown
 ## Rules
 
@@ -198,6 +205,37 @@ Ready to use:
   /memory search    — search memory
   /memory workstream <name> — load workstream context
 ```
+
+---
+
+## Step 6: Auto-memory protection (optional)
+
+Explain the 200-line limit to the user and offer protection options:
+
+```
+## Auto-memory protection
+
+Claude Code's auto-memory writes to MEMORY.md automatically. The file is 
+truncated after 200 lines — anything below line 200 silently disappears 
+from context.
+
+Your MEMORY.md is currently {N} lines. Options:
+
+1. Keep as-is — auto-memory enabled, Rules block is at the top (safe)
+2. Disable auto-memory — plugin handles memory, no auto-writes:
+   Add to settings.json: { "autoMemoryEnabled": false }
+3. Trim index — move old entries to archive, keep MEMORY.md under 150 lines
+
+Which do you prefer? (1/2/3 or skip)
+```
+
+If user chooses 2:
+```json
+// Add to ~/.claude/settings.json or .claude/settings.json
+{ "autoMemoryEnabled": false }
+```
+
+If user chooses 3 — identify entries that can be removed (old, superseded, or redundant) and propose which to cut. Move to `memory-backup/` rather than deleting.
 
 ---
 

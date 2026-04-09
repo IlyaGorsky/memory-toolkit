@@ -102,6 +102,24 @@ The plugin provides skills (`/session-start`, `/memory`, `/reflect`, etc.) and h
 - Your existing frontmatter format (`name`, `description`, `type`) is compatible
 - Nothing is migrated or moved automatically
 
+### Protecting your MEMORY.md
+
+Claude Code truncates MEMORY.md after 200 lines / 25KB. Auto-memory extraction adds entries over time, which can silently push your rules and commands past the limit.
+
+**Option 1: Structural protection (default)**
+`/memory-setup` places API and Rules blocks at the top of MEMORY.md. Even if auto-memory fills up the index below — your rules survive truncation.
+
+**Option 2: Disable auto-memory**
+If you want full control, disable the built-in auto-memory extraction:
+```json
+// In ~/.claude/settings.json or .claude/settings.json
+{ "autoMemoryEnabled": false }
+```
+The plugin's hooks and skills will still work — they write to separate files (`notes/`, `workstreams/handoff.md`, `sessions.jsonl`), not to MEMORY.md directly.
+
+**Option 3: Keep both**
+Leave auto-memory enabled and let `/memory-setup` manage the structure. Run `/memory-setup` periodically to check MEMORY.md size and trim if needed.
+
 ## Verify
 
 After installation, start a new Claude Code session and check:
