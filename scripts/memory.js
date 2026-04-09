@@ -299,6 +299,81 @@ function printDocs() {
     }
 }
 
+// --- Recurring feedback detection ---
+
+function queryRecurring(minCount = 2) {
+    const feedbackFiles = getFilesFromDir('feedback');
+    if (!feedbackFiles.length) return [];
+
+    // Extract keywords from each feedback file (name + description + body first line)
+    const entries = feedbackFiles.map(f => {
+        const body = getBody(f.content);
+        const firstLine = body.split('\n')[0] || '';
+        const desc = f.frontmatter.description || '';
+        const tokens = `${f.name} ${desc} ${firstLine}`.toLowerCase()
+            .replace(/[^a-z0-9а-яё\s-]/g, ' ')
+            .split(/\s+/)
+            .filter(t => t.length > 3);
+        return { file: f, tokens: new Set(tokens), desc, firstLine };
+    });
+
+    // Find clusters: files that share significant keyword overlap
+    const clusters = [];
+    const used = new Set();
+
+    for (let i = 0; i < entries.length; i++) {
+        if (used.has(i)) continue;
+        const cluster = [entries[i]];
+        used.add(i);
+
+        for (let j = i + 1; j < entries.length; j++) {
+            if (used.has(j)) continue;
+            // Count shared tokens
+            let shared = 0;
+            for (const t of entries[i].tokens) {
+                if (entries[j].tokens.has(t)) shared++;
+            }
+            const minSize = Math.min(entries[i].tokens.size, entries[j].tokens.size);
+            // At least 2 shared tokens and >30% overlap
+            if (shared >= 2 && minSize > 0 && shared / minSize > 0.3) {
+                cluster.push(entries[j]);
+                used.add(j);
+            }
+        }
+
+        if (cluster.length >= minCount) {
+            // Find common tokens
+            const commonTokens = [...cluster[0].tokens].filter(t =>
+                cluster.every(c => c.tokens.has(t))
+            );
+            clusters.push({
+                count: cluster.length,
+                files: cluster.map(c => c.file.name),
+                topic: commonTokens.slice(0, 5).join(', ') || cluster[0].desc,
+                descriptions: cluster.map(c => c.desc || c.firstLine),
+            });
+        }
+    }
+
+    return clusters.sort((a, b) => b.count - a.count);
+}
+
+function printRecurring() {
+    const clusters = queryRecurring();
+    if (!clusters.length) return console.log('No recurring feedback patterns found.');
+
+    console.log(`\n# Recurring feedback (${clusters.length} patterns)\n`);
+    for (const c of clusters) {
+        console.log(`## "${c.topic}" (×${c.count})`);
+        console.log(`  Files: ${c.files.join(', ')}`);
+        for (const desc of c.descriptions) {
+            console.log(`  - ${desc}`);
+        }
+        console.log(`  → Candidate for promotion to .claude/rules/`);
+        console.log('');
+    }
+}
+
 // --- Workstream management ---
 
 function addWorkstream(name, ...keywords) {
@@ -369,6 +444,7 @@ const commands = {
     'remove-workstream': removeWorkstream,
     workstreams: listWorkstreams,
     docs: printDocs,
+    recurring: printRecurring,
     dir: () => console.log(MEMORY_DIR),
 };
 
@@ -389,6 +465,7 @@ if (require.main === module) {
         console.log('  list [type]            — list files');
         console.log('  note <text>            — quick note');
         console.log('  docs                   — collect DOC: notes');
+        console.log('  recurring              — find recurring feedback patterns');
         console.log('  dir                    — memory directory path');
     } else {
         commands[cmd](...args);
@@ -410,4 +487,5 @@ module.exports = {
     DIRS,
     note,
     queryDocs,
+    queryRecurring,
 };

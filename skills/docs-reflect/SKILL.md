@@ -11,21 +11,29 @@ Collect DOC: notes accumulated during the session, generalize them into rules, a
 
 ---
 
-## Step 1: Collect DOC: notes
+## Step 1: Collect findings
+
+Two sources: DOC: notes from the current session, and recurring feedback from memory.
+
+### 1a: DOC: notes
 
 ```bash
 node "$MEM" --dir="$MEM_DIR" docs
 ```
 
-If no DOC: notes found — tell user "No DOC: notes this session." and stop.
-
-Also check memory for recurring patterns that haven't been promoted to docs yet:
+### 1b: Recurring feedback patterns
 
 ```bash
-node "$MEM" --dir="$MEM_DIR" search "DOC:"
+node "$MEM" --dir="$MEM_DIR" recurring
 ```
 
-If memory has similar feedback from past sessions — mention it: "This pattern came up before. Worth promoting to repo docs."
+This scans `feedback/` files for clusters — similar corrections that appeared 2+ times across sessions. Recurring patterns are strong candidates for promotion to `.claude/rules/`.
+
+### Combine
+
+If both sources are empty — tell user "No documentation findings." and stop.
+
+If recurring patterns found — highlight them: "This feedback appeared N times across sessions. Strong candidate for `.claude/rules/`."
 
 ---
 

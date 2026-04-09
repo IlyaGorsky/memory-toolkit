@@ -232,4 +232,34 @@ describe('memory.js', () => {
       assert.ok(result.includes('some general insight'));
     });
   });
+
+  describe('recurring', () => {
+    it('finds recurring feedback patterns', () => {
+      writeFile('feedback/no-mocks-1.md', '---\nname: no mocks\ndescription: Do not mock database in integration tests\ntype: feedback\n---\nDo not mock database in integration tests');
+      writeFile('feedback/no-mocks-2.md', '---\nname: no mocks again\ndescription: Stop mocking database in integration tests\ntype: feedback\n---\nStop mocking database in integration tests');
+
+      const result = run('recurring');
+
+      assert.ok(result.includes('mock'));
+      assert.ok(result.includes('×2'));
+      assert.ok(result.includes('.claude/rules/'));
+    });
+
+    it('returns message when no recurring patterns', () => {
+      writeFile('feedback/unique-1.md', '---\nname: one\ndescription: Completely unique topic alpha\ntype: feedback\n---\nalpha beta gamma');
+      writeFile('feedback/unique-2.md', '---\nname: two\ndescription: Totally different subject omega\ntype: feedback\n---\nomega delta epsilon');
+
+      const result = run('recurring');
+
+      assert.ok(result.includes('No recurring'));
+    });
+
+    it('ignores clusters smaller than 2', () => {
+      writeFile('feedback/single.md', '---\nname: single\ndescription: Only one feedback about testing\ntype: feedback\n---\nTesting something');
+
+      const result = run('recurring');
+
+      assert.ok(result.includes('No recurring'));
+    });
+  });
 });
