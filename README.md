@@ -31,24 +31,85 @@ Claude Code forgets everything between sessions. You start fresh every time — 
 
 ## How it works
 
+### Session lifecycle
+
 ```
   /session-start ──→ work ──→ /session-end
         ↑                          │
-        │        handoff.md        │
+        │      handoff.md          │
+        │  (what you did,          │
+        │   where you stopped,     │
+        │   what's next)           │
         └──────────────────────────┘
-
-  During work:
-    /park ────→ save idea for later
-    /reflect ─→ capture insights
-    /memory ──→ search past decisions
-
-  Auto (hooks):
-    compact ──→ saves state
-    commit ───→ logs to notes
-    start ────→ shows handoff
 ```
 
-Memory is stored as markdown files in `~/.claude/projects/<project>/memory/` — the same directory Claude Code's auto-memory uses. Nothing proprietary, fully portable, human-readable.
+### Use case 1: Context survives compaction
+
+Without plugin — context is lost after compact:
+```
+  you ──→ work 2h ──→ [compact] ──→ "what were we doing?"
+```
+
+With plugin — hooks auto-save before compact:
+```
+  you ──→ work 2h ──→ [PreCompact hook] ──→ [compact]
+                            │
+                            ▼
+                      handoff.md saved
+                            │
+                            ▼
+                      "here's where we left off"
+```
+
+### Use case 2: Switching between workstreams
+
+```
+  Monday:   /session-start auth-refactor
+              ├── decisions/auth-token-format.md
+              ├── feedback/no-mocks-in-tests.md
+              └── workstreams/handoff.md ← saved on /session-end
+
+  Tuesday:  /session-start billing
+              ├── loads billing context
+              └── auth-refactor untouched
+
+  Thursday: /session-continue auth-refactor
+              └── picks up from Monday's handoff
+```
+
+### Use case 3: Ideas don't get lost
+
+```
+  working on feature X...
+    └── "we should also refactor Y"
+          │
+          ▼
+        /park "refactor Y — noticed coupling in auth module"
+          │
+          ├── saves to notes/ with context
+          └── you keep working on X
+
+  next week:
+    /memory search "refactor Y"
+      └── found: full context from that moment
+```
+
+### Memory structure
+
+```
+  ~/.claude/projects/<project>/memory/
+    ├── MEMORY.md            ← index (loaded every session)
+    ├── workstreams.json     ← workstream definitions
+    ├── feedback/            ← corrections, confirmed approaches
+    ├── decisions/           ← architectural choices with reasoning
+    ├── profile/             ← user role, preferences
+    ├── reference/           ← external links, dashboards
+    ├── notes/               ← daily notes (auto from hooks)
+    └── workstreams/
+         └── handoff.md      ← session continuity
+```
+
+All files are markdown. Human-readable, git-friendly, portable.
 
 ## Hooks
 
