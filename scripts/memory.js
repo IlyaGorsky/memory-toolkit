@@ -101,7 +101,7 @@ function queryRecent(n = 5) {
 function queryWorkstream(name) {
     if (!name) return [];
     const q = name.toLowerCase();
-    const keywords = WORKSTREAM_ALIASES[q] || [q];
+    const keywords = [].concat(WORKSTREAM_ALIASES[q] || q);
     return getAllFiles()
         .filter(f => keywords.some(k =>
             f.name.toLowerCase().includes(k) || f.content.toLowerCase().includes(k)

@@ -45,9 +45,10 @@ If `--fresh` argument or no `$MEM_DIR`:
 2. If no `CLAUDE_PLUGIN_ROOT`: `cp /path/to/memory-toolkit/scripts/memory.js "$MEM_DIR/"`
 3. Ask: "What are the main workstreams in this project?" → create `workstreams.json`
 4. Ask: "Describe your role in 1-2 sentences" → create `profile/role.md`
-5. Ask: "Key links (Jira, Figma, Slack, docs)?" → create `reference/links.md`
-6. Create MEMORY.md from template (see Step 4)
-7. Create subdirectories: `mkdir -p "$MEM_DIR"/{feedback,decisions,profile,reference,notes,workstreams}`
+5. Ask: "What language do you prefer for documentation and rules? (e.g. English, Russian)" → create `profile/language.md`
+6. Ask: "Key links (Jira, Figma, Slack, docs)?" → create `reference/links.md`
+7. Create MEMORY.md from template (see Step 4)
+8. Create subdirectories: `mkdir -p "$MEM_DIR"/{feedback,decisions,profile,reference,notes,workstreams}`
 
 ### B) Existing MEMORY.md → upgrade in place
 

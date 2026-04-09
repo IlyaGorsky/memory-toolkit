@@ -1,3 +1,4 @@
 plan.md
 *.backup.*
 node_modules/
+.claude/
