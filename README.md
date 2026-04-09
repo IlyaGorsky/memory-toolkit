@@ -94,19 +94,33 @@ With plugin — hooks auto-save before compact:
       └── found: full context from that moment
 ```
 
-### Use case 4: Look into past sessions
+### Use case 4: Every session is reachable from any session
 
-Claude Code keeps `.jsonl` logs of every session but can't read them itself. This plugin can:
+Claude Code keeps `.jsonl` logs but doesn't connect them. Each session starts blind. This plugin tracks every session with an ID, so you can look back:
+
+```
+  SessionStart hook fires automatically:
+    → reads session_id from Claude Code
+    → logs to notes/:
+        "14:30 SESSION_START uuid:a1b2c3 branch:main transcript:/path/to/a1b2c3.jsonl"
+    → appends to sessions.jsonl (searchable index)
+
+  PreCompact hook:
+    → saves session_id in handoff.md
+    → next session knows which session wrote the handoff
+```
+
+Now any session can reach any past session:
 
 ```
   /session-restore list
-    → shows all past sessions with dates and sizes
+    → shows all sessions with dates, branches, UUIDs
 
   /session-restore search "why did we choose PostgreSQL"
-    → greps across .jsonl files, parses results
+    → greps across .jsonl transcripts, parses results
 
-  /session-restore restore
-    → rebuilds timeline from last session:
+  /session-restore restore <uuid>
+    → rebuilds timeline of that specific session:
         Block 1: discussed auth architecture
         Block 2: implemented token refresh
         Block 3: fixed test flake ← crashed here
@@ -122,6 +136,7 @@ Claude Code keeps `.jsonl` logs of every session but can't read them itself. Thi
   ~/.claude/projects/<project>/memory/
     ├── MEMORY.md            ← index (loaded every session)
     ├── workstreams.json     ← workstream definitions
+    ├── sessions.jsonl       ← session ID index (auto from hooks)
     ├── feedback/            ← corrections, confirmed approaches
     ├── decisions/           ← architectural choices with reasoning
     ├── profile/             ← user role, preferences
