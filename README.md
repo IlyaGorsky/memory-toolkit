@@ -168,6 +168,34 @@ claude --plugin-dir /path/to/memory-toolkit
 
 See [INSTALL.md](INSTALL.md) for all options including existing auto-memory migration.
 
+## How it compares
+
+There are great memory tools out there. They solve different problems.
+
+**[claude-mem](https://github.com/thedotmack/claude-mem)** (46K stars) — automatically captures everything Claude does, compresses with AI, injects into future sessions. Full automation, progressive disclosure, web viewer. Requires SQLite, a background worker service, AGPL license.
+
+**[MemPalace](https://github.com/milla-jovovich/mempalace)** (31K stars) — stores verbatim conversations in ChromaDB, semantic search with 96.6% LongMemEval score. Best for "find what we discussed 3 months ago". Requires Python, ChromaDB, `pip install`.
+
+**memory-toolkit** solves a different problem: **session workflow, not storage**.
+
+| | claude-mem | MemPalace | memory-toolkit |
+|---|---|---|---|
+| Problem solved | "What did Claude do?" | "What did we discuss?" | "Where did I stop and what's next?" |
+| Storage | SQLite + AI compression | ChromaDB + embeddings | Markdown files (human-readable) |
+| Dependencies | Node.js, SQLite, worker | Python, ChromaDB | None (built-in Node.js) |
+| Auto-capture | Full (hooks capture all tool use) | Manual (`mine` command) | Hooks (compact, commit, session start) |
+| Session lifecycle | No | No | Yes — start, continue, end, handoff |
+| Workstreams | No | Wings/halls/rooms | Yes — switch context, keep each isolated |
+| Works offline | Yes | Yes | Yes |
+| License | AGPL 3.0 | MIT | MIT |
+
+**When to use what:**
+- You want total recall of everything Claude did → **claude-mem**
+- You want semantic search across months of conversations → **MemPalace**
+- You want to not lose context between sessions, switch between tasks, and have a workflow that survives compaction → **memory-toolkit**
+
+They're complementary — you could use memory-toolkit for session workflow and claude-mem or MemPalace for long-term recall.
+
 ## Philosophy
 
 No vector DB. No external services. No complex setup.
