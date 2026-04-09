@@ -97,14 +97,29 @@ Wait for user confirmation before making changes.
 
 ## Step 4: Apply changes
 
-### 4a: Ensure memory.js is accessible
+### 4a: Resolve memory.js path
 
-If the plugin is installed, `memory.js` is available at `${CLAUDE_PLUGIN_ROOT}/scripts/memory.js` — no copy needed.
+Find memory.js — plugin install path first, then local copy:
 
-If manual install (no `CLAUDE_PLUGIN_ROOT`), copy it:
 ```bash
-cp /path/to/memory-toolkit/scripts/memory.js "$MEM_DIR/"
+PLUGIN_MEM=$(claude plugin list --json 2>/dev/null | node -e "
+  try { const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+  const p=d.find(x=>x.id.includes('memory-toolkit'));
+  if(p)console.log(p.installPath+'/scripts/memory.js') } catch{}" 2>/dev/null)
+
+if [ -n "$PLUGIN_MEM" ] && [ -f "$PLUGIN_MEM" ]; then
+  MEM="$PLUGIN_MEM"
+elif [ -f "$MEM_DIR/memory.js" ]; then
+  MEM="$MEM_DIR/memory.js"
+else
+  MEM=$(find ~/.claude/plugins/cache -name "memory.js" -path "*/memory-toolkit/*/scripts/*" 2>/dev/null | head -1)
+fi
 ```
+
+**Do NOT copy** `memory.js` if the plugin is installed — use the resolved `$MEM` path.
+Only copy as last resort if plugin is not installed and no `$MEM` found.
+
+Use `$MEM` as an absolute path when writing the API block into MEMORY.md.
 
 ### 4b: Update MEMORY.md
 
@@ -117,11 +132,11 @@ Read current MEMORY.md. Ensure the structure follows this order:
 
 This order matters: Claude Code truncates MEMORY.md after 200 lines. By keeping API and Rules at the top, they survive truncation even if auto-memory adds many index entries.
 
-**API block** (add if missing, right after heading):
+**API block** (add if missing, right after heading — use the absolute `$MEM` path resolved in 4a):
 ```markdown
 ## API
 ```bash
-node {MEM_DIR}/memory.js <command>
+node {absolute path to memory.js} --dir={MEM_DIR} <command>
 ```
 ```
 

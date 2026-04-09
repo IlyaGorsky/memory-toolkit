@@ -16,28 +16,35 @@ argument-hint: "<command> [args] [--brief] — search <query> | workstream <name
 GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 PROJ_KEY=$(echo "$GIT_ROOT" | tr '/.' '-' | sed 's/^-//')
 MEM_DIR="$HOME/.claude/projects/-${PROJ_KEY}/memory"
-MEM="$MEM_DIR/memory.js"
 ```
 
-If `$MEM` does not exist — fuzzy match by repo name:
+Resolve `memory.js` — check plugin install path first, then local copy:
 ```bash
-if [ ! -f "$MEM" ]; then
-  REPO_NAME=$(basename "$GIT_ROOT")
-  FOUND=$(find ~/.claude/projects -maxdepth 2 -name "memory.js" -path "*/memory/*" 2>/dev/null | while read f; do
-    if dirname "$(dirname "$f")" | grep -q "$REPO_NAME"; then echo "$f"; break; fi
-  done)
-  if [ -n "$FOUND" ]; then MEM="$FOUND"; MEM_DIR=$(dirname "$FOUND"); fi
+# 1. Plugin install path (from claude plugin list)
+PLUGIN_MEM=$(claude plugin list --json 2>/dev/null | node -e "
+  try { const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+  const p=d.find(x=>x.id.includes('memory-toolkit'));
+  if(p)console.log(p.installPath+'/scripts/memory.js') } catch{}" 2>/dev/null)
+
+# 2. Local copy in memory dir
+# 3. Search in plugin cache
+if [ -n "$PLUGIN_MEM" ] && [ -f "$PLUGIN_MEM" ]; then
+  MEM="$PLUGIN_MEM"
+elif [ -f "$MEM_DIR/memory.js" ]; then
+  MEM="$MEM_DIR/memory.js"
+else
+  MEM=$(find ~/.claude/plugins/cache -name "memory.js" -path "*/memory-toolkit/*/scripts/*" 2>/dev/null | head -1)
 fi
 ```
 
 ---
 
-## If not initialized (no memory.js found)
+## If not initialized (no memory.js and no plugin found)
 
 Bootstrap for this project:
 
 1. Create memory dir: `mkdir -p "$MEM_DIR"`
-2. Copy memory.js from plugin: `cp "${CLAUDE_PLUGIN_ROOT:-~/.claude/scripts}/memory.js" "$MEM_DIR/"` (or from another project's memory dir)
+2. Do NOT copy `memory.js` if the plugin is installed — use `$MEM` resolved above. Only copy if plugin is not installed and no `$MEM` found.
 3. Ask: "What workstreams does the project have?" → create `workstreams.json`
 4. Ask: "Describe your role in 1-2 sentences" → Profile
 5. Ask: "Key links?" → Reference
@@ -48,7 +55,7 @@ Bootstrap for this project:
 
 ## API
 \```bash
-node {MEM_DIR}/memory.js <command>
+node {absolute $MEM path} --dir={MEM_DIR} <command>
 \```
 
 ## Profile
