@@ -12,12 +12,11 @@ alongside CLAUDE.md from the start.
 Built for tech leads who run multiple workstreams in parallel.
 
 ```bash
-git clone https://github.com/IlyaGorsky/memory-toolkit.git
-claude plugin marketplace add ./memory-toolkit
+claude plugin marketplace add IlyaGorsky/memory-toolkit
 claude plugin install memory-toolkit
 ```
 
-See [INSTALL.md](INSTALL.md) for other methods (per-session, manual copy, existing auto-memory migration).
+See [INSTALL.md](INSTALL.md) for other methods (local clone for contributors, per-session, manual copy, existing auto-memory migration).
 
 ## The problem
 

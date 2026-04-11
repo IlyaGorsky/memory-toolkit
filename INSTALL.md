@@ -1,28 +1,42 @@
 # Installation
 
-## Quick start (local marketplace)
+## Quick start
 
-Clone the repo and register it as a local marketplace:
+Two commands — Claude Code clones the repo, registers it as a marketplace, and installs the plugin:
 
 ```bash
-git clone https://github.com/IlyaGorsky/memory-toolkit.git
-claude plugin marketplace add ./memory-toolkit
+claude plugin marketplace add IlyaGorsky/memory-toolkit
 claude plugin install memory-toolkit
 ```
 
-The plugin will load automatically in every session.
+The plugin loads automatically in every session afterwards. To update later:
+
+```bash
+claude plugin update memory-toolkit
+```
+
+## Local clone (for contributors)
+
+If you want to hack on the plugin and have your edits picked up live, register a directory marketplace pointing at your checkout:
+
+```bash
+git clone https://github.com/IlyaGorsky/memory-toolkit.git
+cd memory-toolkit
+claude plugin marketplace add .
+claude plugin install memory-toolkit
+```
+
+Edits to skills, hooks, and scripts in this checkout become visible to Claude Code on the next session start (no reinstall needed).
+
+> **Heads-up:** if you previously installed the plugin from the github source, you'll need to `claude plugin marketplace remove memory-toolkit` first — marketplace names are global and a registration with the same name cannot coexist.
 
 ## Per-session (no install)
 
-Load for a single session without installing:
+Load for a single session without installing globally:
 
 ```bash
 claude --plugin-dir /path/to/memory-toolkit
 ```
-
-## Public marketplace
-
-Not published yet — coming soon. For now, use the local marketplace method above.
 
 ## Manual copy
 
