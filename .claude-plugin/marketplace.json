@@ -1,5 +1,8 @@
 {
   "name": "memory-toolkit",
+  "metadata": {
+    "description": "Session memory lifecycle plugin for Claude Code — structured markdown memory, workstreams, handoff, and auto-save hooks. No vector DB, no daemon."
+  },
   "owner": { "name": "Ilya Gorsky" },
   "plugins": [
     {
