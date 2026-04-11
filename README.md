@@ -1,6 +1,15 @@
 # memory-toolkit
 
-**Claude Code forgets between sessions.** This plugin adds session lifecycle, workstreams, and a memory API on top of auto-memory — just markdown files, no daemon, no vector DB.
+**CLAUDE.md is for your codebase. Not for your sessions.**
+
+People stuff session state into CLAUDE.md because there's nowhere
+else to put it. It works until it doesn't — size limit, goes stale,
+resets every session, mixes personal state with team conventions.
+
+memory-toolkit is the session layer that should have existed
+alongside CLAUDE.md from the start.
+
+Built for tech leads who run multiple workstreams in parallel.
 
 ```bash
 git clone https://github.com/IlyaGorsky/memory-toolkit.git
@@ -12,10 +21,6 @@ See [INSTALL.md](INSTALL.md) for other methods (per-session, manual copy, existi
 
 ## The problem
 
-**You're using CLAUDE.md for session memory. It won't work.**
-
-CLAUDE.md loads once at session start and never updates — it's for project rules, not session state. It can't save where you stopped. It can't survive compaction. It hits a hard size limit (~200 lines) before truncation silently pushes out your rules.
-
 Three documented pain points this plugin solves:
 
 **1. Compaction silently destroys context** — you're 4 hours into an auth refactor, compaction fires, Claude forgets every architectural decision you made together. Starting over takes 45 minutes and never fully recovers. ([real report](https://dev.to/gonewx/claude-code-lost-my-4-hour-session-heres-the-0-fix-that-actually-works-24h6))
@@ -24,18 +29,7 @@ Three documented pain points this plugin solves:
 
 **3. Switching between tasks means re-explaining everything** — each context rebuild takes 10–15 minutes. Switching between workstreams multiple times a day compounds into hours of lost time. ([real report](https://dev.to/kaz123/how-i-solved-claude-codes-context-loss-problem-with-a-lightweight-session-manager-265d))
 
-memory-toolkit fixes all three with hooks that fire at the right moment, not at session start.
-
-## CLAUDE.md is for your codebase, not your sessions
-
-People stuff session state into CLAUDE.md because there's nowhere else to put it. It works until it doesn't:
-
-- hits size limit, silently truncates
-- goes stale, nobody maintains it
-- mixes personal state with team conventions
-- resets every session anyway
-
-memory-toolkit is what should have existed alongside CLAUDE.md from the start — the session layer that CLAUDE.md was never designed to be.
+memory-toolkit fixes all three with hooks that fire at the right moment — not at session start.
 
 ## What this plugin does
 
@@ -100,8 +94,6 @@ Tue  /session-start billing
 Thu  /session-continue auth-refactor
        └── picks up from Monday's handoff, fresh context
 ```
-
-> **Status:** today, `workstreams/handoff.md` is a **single file** that gets overwritten on every `/session-end`. The "untouched while you work on billing" behavior above is the **target state** — true per-workstream isolation and routing of session findings into the right workstream is on the roadmap (AP-24).
 
 ### Use case 3: Ideas don't get lost
 
@@ -232,6 +224,10 @@ There are great memory tools out there. They solve different problems.
 - You want session continuity, workstreams, and a workflow that survives compaction — with no daemon, no DB, MIT license → **memory-toolkit**
 
 They're complementary — you could use memory-toolkit for session workflow and claude-mem or MemPalace for long-term recall.
+
+## Current limitations
+
+- **Workstream isolation** — `workstreams/handoff.md` is currently a single file overwritten on every `/session-end`. True per-workstream isolation is on the roadmap.
 
 ## Philosophy
 
