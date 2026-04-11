@@ -5,6 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { findMemoryDirOrExit } = require('./lib/find-memory-dir');
 
 // Read stdin (hook passes JSON)
 let stdin = '';
@@ -20,24 +21,8 @@ try {
   transcriptPath = data.transcript_path || '';
 } catch {}
 
-// Find memory dir for current project
 const cwd = process.cwd();
-const projectKey = cwd.replace(/[/.]/g, '-').replace(/^-/, '');
-let memoryDir = path.join(
-  process.env.HOME, '.claude', 'projects', `-${projectKey}`, 'memory'
-);
-
-if (!fs.existsSync(memoryDir)) {
-  const parts = cwd.split('/');
-  let found = null;
-  for (let i = parts.length; i > 2; i--) {
-    const key = parts.slice(1, i).join('-');
-    const dir = path.join(process.env.HOME, '.claude', 'projects', `-${key}`, 'memory');
-    if (fs.existsSync(dir)) { found = dir; break; }
-  }
-  if (!found) process.exit(0);
-  memoryDir = found;
-}
+const memoryDir = findMemoryDirOrExit();
 
 // Get git info
 let branch = '';
