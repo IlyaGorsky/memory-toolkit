@@ -1,10 +1,28 @@
 # memory-toolkit
 
-Claude Code plugin for session memory lifecycle.
+**Claude Code forgets between sessions.** This plugin adds session lifecycle, workstreams, and a memory API on top of auto-memory — just markdown files, no daemon, no vector DB.
+
+```bash
+git clone https://github.com/IlyaGorsky/memory-toolkit.git
+claude plugin marketplace add ./memory-toolkit
+claude plugin install memory-toolkit
+```
+
+See [INSTALL.md](INSTALL.md) for other methods (per-session, manual copy, existing auto-memory migration).
 
 ## The problem
 
 Claude Code forgets everything between sessions. You start fresh every time — re-explain context, re-discover decisions, re-load the mental model. Auto-memory helps, but it's a flat list with no structure, no search, and no session continuity.
+
+## Why not just CLAUDE.md?
+
+CLAUDE.md is great for **stable** project rules — conventions, architecture, commands. It's the wrong tool for **session state**:
+
+- **It's loaded into every conversation**, so it has a hard size budget (~200 lines / 25KB) before truncation. Session-by-session details would push out the rules that need to survive.
+- **It's rewritten by hand.** There's no structure for "what did I do yesterday", "where am I in this refactor", "which idea did I park last week".
+- **It's shared (committed).** Personal session state and team conventions don't belong in the same file.
+
+memory-toolkit keeps CLAUDE.md for what it's good at and handles the rest separately: handoffs, workstreams, session logs, parked ideas.
 
 ## What this plugin does
 
@@ -14,23 +32,6 @@ Claude Code forgets everything between sessions. You start fresh every time — 
 - **Workstreams** — group related memory by project area. Switch context without losing it.
 - **Memory API** — search, filter, and query your memory from any skill or hook. No vector DB, no external dependencies — just markdown files and a Node.js script.
 - **Auto-save hooks** — save state before context compaction, log commits to daily notes, show handoff on session start.
-
-## Skills
-
-| Skill | What it does |
-|-------|-------------|
-| `/session-start` | Cold start — load context, show status, pick focus |
-| `/session-continue` | Resume a workstream from where you left off |
-| `/session-end` | Save state, write handoff for next session |
-| `/memory` | Search, list, query memory files |
-| `/memory-setup` | Initialize or upgrade memory for a project |
-| `/park` | Save an idea for later without losing the thought |
-| `/reflect` | Session reflection — what happened, what to improve |
-| `/session-insights` | Extract patterns from .jsonl session backups |
-| `/session-restore` | Recover context from past sessions |
-| `/docs-reflect` | Extract session knowledge into repo documentation |
-
-All skills are also available with the plugin namespace prefix: `/memory-toolkit:session-start`, `/memory-toolkit:memory`, etc. Use namespaced names to avoid conflicts with other plugins.
 
 ## How it works
 
@@ -151,6 +152,23 @@ Now any session can reach any past session:
 
 All files are markdown. Human-readable, git-friendly, portable.
 
+## Skills
+
+| Skill | What it does |
+|-------|-------------|
+| `/session-start` | Cold start — load context, show status, pick focus |
+| `/session-continue` | Resume a workstream from where you left off |
+| `/session-end` | Save state, write handoff for next session |
+| `/memory` | Search, list, query memory files |
+| `/memory-setup` | Initialize or upgrade memory for a project |
+| `/park` | Save an idea for later without losing the thought |
+| `/reflect` | Session reflection — what happened, what to improve |
+| `/session-insights` | Extract patterns from .jsonl session backups |
+| `/session-restore` | Recover context from past sessions |
+| `/docs-reflect` | Extract session knowledge into repo documentation |
+
+All skills are also available with the plugin namespace prefix: `/memory-toolkit:session-start`, `/memory-toolkit:memory`, etc. Use namespaced names to avoid conflicts with other plugins.
+
 ## Hooks
 
 | Event | Action |
@@ -159,27 +177,15 @@ All files are markdown. Human-readable, git-friendly, portable.
 | **PostToolUse** (git commit) | Log commits to daily notes (triggers when Claude Code runs `git commit`, not manual terminal commits) |
 | **SessionStart** | Log session ID, show handoff, display DOC: reminder |
 
-## Install
-
-```bash
-# From marketplace (when available)
-claude plugin install memory-toolkit
-
-# Or load for one session
-claude --plugin-dir /path/to/memory-toolkit
-```
-
-See [INSTALL.md](INSTALL.md) for all options including existing auto-memory migration.
-
 ## How it compares
 
 There are great memory tools out there. They solve different problems.
 
-**[claude-mem](https://github.com/thedotmack/claude-mem)** (46K stars) — automatically captures everything Claude does, compresses with AI, injects into future sessions. Full automation, progressive disclosure, web viewer. Requires SQLite, a background worker service, AGPL license.
+**[claude-mem](https://github.com/thedotmack/claude-mem)** — automatically captures everything Claude does, compresses with AI, injects into future sessions. Full automation, progressive disclosure, web viewer. Trade-offs: requires SQLite, runs a background worker daemon, **AGPL 3.0** (viral license — derivative works must also be AGPL).
 
-**[MemPalace](https://github.com/milla-jovovich/mempalace)** (31K stars) — stores verbatim conversations in ChromaDB, semantic search with 96.6% LongMemEval score. Best for "find what we discussed 3 months ago". Requires Python, ChromaDB, `pip install`.
+**[MemPalace](https://github.com/milla-jovovich/mempalace)** — stores verbatim conversations in ChromaDB, semantic search with 96.6% LongMemEval score. Best for "find what we discussed 3 months ago". Trade-offs: requires Python, ChromaDB, `pip install`.
 
-**memory-toolkit** solves a different problem: **session workflow, not storage**.
+**memory-toolkit** solves a different problem: **session workflow, not storage**. No daemon, no DB, MIT license.
 
 | | claude-mem | MemPalace | memory-toolkit |
 |---|---|---|---|
@@ -194,9 +200,10 @@ There are great memory tools out there. They solve different problems.
 | License | AGPL 3.0 | MIT | MIT |
 
 **When to use what:**
-- You want total recall of everything Claude did → **claude-mem**
+
+- You want total recall of everything Claude did, and you're OK with a daemon and AGPL → **claude-mem**
 - You want semantic search across months of conversations → **MemPalace**
-- You want to not lose context between sessions, switch between tasks, and have a workflow that survives compaction → **memory-toolkit**
+- You want session continuity, workstreams, and a workflow that survives compaction — with no daemon, no DB, MIT license → **memory-toolkit**
 
 They're complementary — you could use memory-toolkit for session workflow and claude-mem or MemPalace for long-term recall.
 

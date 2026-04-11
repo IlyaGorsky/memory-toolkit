@@ -1,24 +1,18 @@
 # Installation
 
-## Option 1: Marketplace (when available)
-
-```bash
-claude plugin install memory-toolkit
-```
-
-## Option 2: Local marketplace
+## Quick start (local marketplace)
 
 Clone the repo and register it as a local marketplace:
 
 ```bash
-git clone https://github.com/igorsky/memory-toolkit.git
-claude plugin marketplace add /path/to/memory-toolkit
+git clone https://github.com/IlyaGorsky/memory-toolkit.git
+claude plugin marketplace add ./memory-toolkit
 claude plugin install memory-toolkit
 ```
 
 The plugin will load automatically in every session.
 
-## Option 3: Per-session
+## Per-session (no install)
 
 Load for a single session without installing:
 
@@ -26,7 +20,11 @@ Load for a single session without installing:
 claude --plugin-dir /path/to/memory-toolkit
 ```
 
-## Option 4: Manual copy
+## Public marketplace
+
+Not published yet — coming soon. For now, use the local marketplace method above.
+
+## Manual copy
 
 Copy skills and hooks into your Claude Code config manually:
 
