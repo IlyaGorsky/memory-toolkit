@@ -12,17 +12,30 @@ See [INSTALL.md](INSTALL.md) for other methods (per-session, manual copy, existi
 
 ## The problem
 
-Claude Code forgets everything between sessions. You start fresh every time — re-explain context, re-discover decisions, re-load the mental model. Auto-memory helps, but it's a flat list with no structure, no search, and no session continuity.
+**You're using CLAUDE.md for session memory. It won't work.**
 
-## Why not just CLAUDE.md?
+CLAUDE.md loads once at session start and never updates — it's for project rules, not session state. It can't save where you stopped. It can't survive compaction. It hits a hard size limit (~200 lines) before truncation silently pushes out your rules.
 
-CLAUDE.md is great for **stable** project rules — conventions, architecture, commands. It's the wrong tool for **session state**:
+Three documented pain points this plugin solves:
 
-- **It's loaded into every conversation**, so it has a hard size budget (~200 lines / 25KB) before truncation. Session-by-session details would push out the rules that need to survive.
-- **It's rewritten by hand.** There's no structure for "what did I do yesterday", "where am I in this refactor", "which idea did I park last week".
-- **It's shared (committed).** Personal session state and team conventions don't belong in the same file.
+**1. Compaction silently destroys context** — you're 4 hours into an auth refactor, compaction fires, Claude forgets every architectural decision you made together. Starting over takes 45 minutes and never fully recovers. ([real report](https://dev.to/gonewx/claude-code-lost-my-4-hour-session-heres-the-0-fix-that-actually-works-24h6))
 
-memory-toolkit keeps CLAUDE.md for what it's good at and handles the rest separately: handoffs, workstreams, session logs, parked ideas.
+**2. `--resume` doesn't actually restore context** — `claude --continue` and `claude --resume` start fresh. All accumulated context — files read, decisions made, in-progress work state — is irrecoverable. ([issue #43696](https://github.com/anthropics/claude-code/issues/43696))
+
+**3. Switching between tasks means re-explaining everything** — each context rebuild takes 10–15 minutes. Switching between workstreams multiple times a day compounds into hours of lost time. ([real report](https://dev.to/kaz123/how-i-solved-claude-codes-context-loss-problem-with-a-lightweight-session-manager-265d))
+
+memory-toolkit fixes all three with hooks that fire at the right moment, not at session start.
+
+## CLAUDE.md is for your codebase, not your sessions
+
+People stuff session state into CLAUDE.md because there's nowhere else to put it. It works until it doesn't:
+
+- hits size limit, silently truncates
+- goes stale, nobody maintains it
+- mixes personal state with team conventions
+- resets every session anyway
+
+memory-toolkit is what should have existed alongside CLAUDE.md from the start — the session layer that CLAUDE.md was never designed to be.
 
 ## What this plugin does
 
