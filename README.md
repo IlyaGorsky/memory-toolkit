@@ -50,117 +50,130 @@ memory-toolkit is what should have existed alongside CLAUDE.md from the start �
 
 ### Session lifecycle
 
-```
-  /session-start ──→ work ──→ /session-end
-        ↑                          │
-        │      handoff.md          │
-        │  (what you did,          │
-        │   where you stopped,     │
-        │   what's next)           │
-        └──────────────────────────┘
+```text
+/session-start ──→  work  ──→ /session-end
+      ▲                            │
+      │                            │
+      └────── workstreams/ ────────┘
+              handoff.md
+       (what you did, where you stopped, what's next)
 ```
 
 ### Use case 1: Context survives compaction
 
-Without plugin — context is lost after compact:
-```
-  you ──→ work 2h ──→ [compact] ──→ "what were we doing?"
+Without plugin:
+
+```text
+you ──→ work 2h ──→ [compact] ──→ "wait, what were we doing?"
 ```
 
-With plugin — hooks auto-save before compact:
+With plugin — PreCompact hook fires before compaction:
+
+```text
+you ──→ work 2h ──→ [PreCompact hook] ──→ [compact] ──→ next session
+                            │                                 ▲
+                            ├──→ workstreams/handoff.md       │
+                            │    (session_id, branch,         │
+                            │     last commit, uncommitted)   │
+                            │                                 │
+                            └──→ notes/<today>.md             │
+                                 (PRE_COMPACT entry)          │
+                                                              │
+                  SessionStart hook reads handoff ────────────┘
+                  "here's where we left off"
 ```
-  you ──→ work 2h ──→ [PreCompact hook] ──→ [compact]
-                            │
-                            ▼
-                      handoff.md saved
-                            │
-                            ▼
-                      "here's where we left off"
-```
+
+The PreCompact hook captures **state metadata** (session_id, branch, commit, uncommitted files) — fast and deterministic. Richer summaries (decisions made, what's next) are written by `/session-end` when you close a session manually.
 
 ### Use case 2: Switching between workstreams
 
-```
-  Monday:   /session-start auth-refactor
-              ├── decisions/auth-token-format.md
-              ├── feedback/no-mocks-in-tests.md
-              └── workstreams/handoff.md ← saved on /session-end
+```text
+Mon  /session-start auth-refactor
+       ├── loads decisions/auth-token-format.md
+       ├── loads feedback/no-mocks-in-tests.md
+       └── /session-end ──→ workstreams/handoff.md
 
-  Tuesday:  /session-start billing
-              ├── loads billing context
-              └── auth-refactor untouched
+Tue  /session-start billing
+       ├── loads billing context
+       └── auth-refactor handoff untouched
 
-  Thursday: /session-continue auth-refactor
-              └── picks up from Monday's handoff
+Thu  /session-continue auth-refactor
+       └── picks up from Monday's handoff, fresh context
 ```
+
+> **Status:** today, `workstreams/handoff.md` is a **single file** that gets overwritten on every `/session-end`. The "untouched while you work on billing" behavior above is the **target state** — true per-workstream isolation and routing of session findings into the right workstream is on the roadmap (AP-24).
 
 ### Use case 3: Ideas don't get lost
 
-```
-  working on feature X...
-    └── "we should also refactor Y"
-          │
-          ▼
-        /park "refactor Y — noticed coupling in auth module"
-          │
-          ├── saves to notes/ with context
-          └── you keep working on X
+```text
+working on feature X...
+   └── "we should also refactor Y"
+         │
+         ▼
+       /park "refactor Y — noticed coupling in auth module"
+         │
+         ├──→ appended to the active workstream file
+         │    (or a quick note in notes/<today>.md)
+         │
+         └── you keep working on X
 
-  next week:
-    /memory search "refactor Y"
-      └── found: full context from that moment
+next week:
+   /memory search "refactor Y"
+      └── full context from that moment
 ```
 
 ### Use case 4: Every session is reachable from any session
 
-Claude Code keeps `.jsonl` logs but doesn't connect them. Each session starts blind. This plugin tracks every session with an ID, so you can look back:
+Claude Code keeps `.jsonl` transcripts but doesn't connect them. Each session starts blind. This plugin tracks every session with an ID, so you can look back:
 
-```
-  SessionStart hook fires automatically:
-    → reads session_id from Claude Code
-    → logs to notes/:
-        "14:30 SESSION_START uuid:a1b2c3 branch:main transcript:/path/to/a1b2c3.jsonl"
-    → appends to sessions.jsonl (searchable index)
+```text
+SessionStart hook (fires automatically)
+   ├──→ reads session_id from Claude Code
+   ├──→ notes/<today>.md
+   │    "14:30 SESSION_START uuid:a1b2c3 branch:main
+   │     transcript:/path/to/a1b2c3.jsonl"
+   └──→ sessions.jsonl  (searchable index, one line per session)
 
-  PreCompact hook:
-    → saves session_id in handoff.md
-    → next session knows which session wrote the handoff
+PreCompact hook
+   └──→ writes session_id into workstreams/handoff.md
+        (next session knows which session wrote the handoff)
 ```
 
 Now any session can reach any past session:
 
-```
-  /session-restore list
-    → shows all sessions with dates, branches, UUIDs
+```text
+/session-restore list
+   └── all sessions with dates, branches, UUIDs
 
-  /session-restore search "why did we choose PostgreSQL"
-    → greps across .jsonl transcripts, parses results
+/session-restore search "why did we choose PostgreSQL"
+   └── greps across .jsonl transcripts, returns matching turns
 
-  /session-restore restore <uuid>
-    → rebuilds timeline of that specific session:
-        Block 1: discussed auth architecture
-        Block 2: implemented token refresh
-        Block 3: fixed test flake ← crashed here
+/session-restore restore <uuid>
+   └── rebuilds timeline of that specific session:
+         Block 1: discussed auth architecture
+         Block 2: implemented token refresh
+         Block 3: fixed test flake ← crashed here
 
-  /session-insights
-    → patterns across sessions:
-        "auth tests failed 3 times this week — same mock issue"
+/session-insights
+   └── patterns across recent sessions:
+         "auth tests failed 3 times this week — same mock issue"
 ```
 
 ### Memory structure
 
-```
-  ~/.claude/projects/<project>/memory/
-    ├── MEMORY.md            ← index (loaded every session)
-    ├── workstreams.json     ← workstream definitions
-    ├── sessions.jsonl       ← session ID index (auto from hooks)
-    ├── feedback/            ← corrections, confirmed approaches
-    ├── decisions/           ← architectural choices with reasoning
-    ├── profile/             ← user role, preferences
-    ├── reference/           ← external links, dashboards
-    ├── notes/               ← daily notes (auto from hooks)
-    └── workstreams/
-         └── handoff.md      ← session continuity
+```text
+~/.claude/projects/<project>/memory/
+├── MEMORY.md            ← index (loaded into every session)
+├── workstreams.json     ← workstream definitions
+├── sessions.jsonl       ← session ID index (auto, from hooks)
+│
+├── feedback/            ← corrections, confirmed approaches
+├── decisions/           ← architectural choices with reasoning
+├── reference/           ← external links, dashboards
+├── notes/               ← daily notes (auto, from hooks + /park fallback)
+├── profile/             ← (optional) user role, language preferences
+└── workstreams/
+    └── handoff.md       ← session continuity (per workstream)
 ```
 
 All files are markdown. Human-readable, git-friendly, portable.
