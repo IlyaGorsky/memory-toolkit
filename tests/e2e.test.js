@@ -357,4 +357,34 @@ describe('e2e: isolated sandbox', () => {
       );
     });
   });
+
+  // --- commandsMetadata: allowedTools ---
+
+  describe('all skills have allowedTools in commandsMetadata', () => {
+    it('every skill directory has a matching commandsMetadata entry', () => {
+      const pluginJson = JSON.parse(
+        fs.readFileSync(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'), 'utf8')
+      );
+      const metadata = pluginJson.commandsMetadata || {};
+      const skillsDir = path.join(PLUGIN_ROOT, 'skills');
+      const skillNames = fs.readdirSync(skillsDir, { withFileTypes: true })
+        .filter(d => d.isDirectory() && fs.existsSync(path.join(skillsDir, d.name, 'SKILL.md')))
+        .map(d => d.name);
+
+      for (const name of skillNames) {
+        assert.ok(
+          metadata[name],
+          `skill "${name}" missing from commandsMetadata`
+        );
+        assert.ok(
+          Array.isArray(metadata[name].allowedTools) && metadata[name].allowedTools.length > 0,
+          `skill "${name}" has no allowedTools`
+        );
+        assert.ok(
+          metadata[name].allowedTools.includes('Bash'),
+          `skill "${name}" should have Bash in allowedTools`
+        );
+      }
+    });
+  });
 });
