@@ -364,6 +364,40 @@ describe('e2e: isolated sandbox', () => {
     });
   });
 
+  // --- Structured logger ---
+
+  describe('lib/log.js', () => {
+    it('outputs JSON with version to stderr at info level', () => {
+      const r = execSync(
+        `node -e "require('${path.join(PLUGIN_ROOT, 'scripts', 'lib', 'log')}').info('e2e-log-test')" 2>&1`,
+        { encoding: 'utf8', timeout: 3000 }
+      ).trim();
+      const entry = JSON.parse(r);
+      assert.ok(entry.ts, 'should have timestamp');
+      assert.ok(entry.v, 'should have version');
+      assert.equal(entry.level, 'info');
+      assert.equal(entry.msg, 'e2e-log-test');
+    });
+
+    it('respects MT_LOG=silent', () => {
+      const r = execSync(
+        `MT_LOG=silent node -e "require('${path.join(PLUGIN_ROOT, 'scripts', 'lib', 'log')}').error('should-not-appear')" 2>&1`,
+        { encoding: 'utf8', timeout: 3000 }
+      ).trim();
+      assert.equal(r, '', 'silent should suppress all output');
+    });
+
+    it('shows debug when MT_LOG=debug', () => {
+      const r = execSync(
+        `MT_LOG=debug node -e "require('${path.join(PLUGIN_ROOT, 'scripts', 'lib', 'log')}').debug('dbg-test')" 2>&1`,
+        { encoding: 'utf8', timeout: 3000 }
+      ).trim();
+      const entry = JSON.parse(r);
+      assert.equal(entry.level, 'debug');
+      assert.equal(entry.msg, 'dbg-test');
+    });
+  });
+
   // --- commandsMetadata: allowedTools ---
 
   describe('all skills have allowedTools in commandsMetadata', () => {

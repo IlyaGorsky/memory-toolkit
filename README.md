@@ -277,6 +277,41 @@ Markdown files, a Node.js script, a Haiku watcher, and Claude Code skills that k
 
 See [PHILOSOPHY.md](PHILOSOPHY.md) for the full rationale.
 
+## Troubleshooting
+
+If something isn't working, run with debug logging:
+
+```bash
+MT_LOG=debug claude
+```
+
+This outputs structured JSON logs to stderr from all hook scripts (session-log, session-watcher, session-save). Each line includes plugin version, timestamp, and context:
+
+```json
+{"ts":"2026-04-12T18:19:32.864Z","v":"1.3.6","level":"debug","msg":"session-log start","sessionId":"abc-123","memoryDir":"/..."}
+```
+
+To capture for bug reports or development:
+
+```bash
+MT_LOG=debug claude 2>mt-debug.log
+```
+
+**For plugin developers:** `MT_LOG=debug` is the primary tool for debugging hook behavior — shows memory dir resolution, AP-20 path updates, watcher throttle decisions, and transcript parsing.
+
+**Common issues:**
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| Workstreams not found on session start | PROJ_KEY mismatch (dots in username) | Update to v1.3.5+ |
+| MEMORY.md shows old version path | AP-20: auto-update not firing | Start a new session — `session-log.js` fixes it |
+| Watcher not detecting findings | Transcript not in `sessions.jsonl` | Check `MT_LOG=debug` for watcher throttle/transcript issues |
+
+**Reporting bugs:** open an issue at [IlyaGorsky/memory-toolkit](https://github.com/IlyaGorsky/memory-toolkit/issues) with:
+1. Plugin version (`claude plugin list`)
+2. Debug log (`MT_LOG=debug claude 2>mt-debug.log`)
+3. What you expected vs what happened
+
 ## License
 
 MIT
