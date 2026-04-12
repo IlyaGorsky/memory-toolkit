@@ -153,6 +153,31 @@ describe('e2e: isolated sandbox', () => {
     });
   });
 
+  // --- Path sanitization ---
+
+  describe('PROJ_KEY sanitization matches CC', () => {
+    it('SKILL.md tr command matches find-memory-dir sanitize()', () => {
+      const { memoryDirFor } = require('../scripts/lib/find-memory-dir');
+      // Test with paths containing dots (e.g., username "i.gorskiy")
+      const testPaths = [
+        '/Users/i.gorskiy/Desktop/projects/my-app',
+        '/home/user.name/code/project',
+        '/tmp/test.dir/sub.dir/project',
+      ];
+      for (const testPath of testPaths) {
+        const jsKey = memoryDirFor(testPath);
+        // Simulate what SKILL.md bash does: tr '/.' '-' | sed 's/^-//'
+        const bashKey = testPath.replace(/[/.]/g, '-').replace(/^-/, '');
+        const bashDir = path.join(
+          process.env.HOME, '.claude', 'projects', `-${bashKey}`, 'memory'
+        );
+        assert.equal(jsKey, bashDir,
+          `sanitization mismatch for ${testPath}: JS=${jsKey} vs bash=${bashDir}`
+        );
+      }
+    });
+  });
+
   // --- Path integrity ---
 
   describe('no hardcoded paths in skills', () => {

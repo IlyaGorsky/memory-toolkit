@@ -21,7 +21,7 @@ If no argument is provided — resolve paths and show workstreams:
 
 ```bash
 MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
-PROJ_KEY=$(pwd | tr '/' '-' | sed 's/^-//')
+PROJ_KEY=$(pwd | tr '/.' '-' | sed 's/^-//')
 MEM_DIR="$HOME/.claude/projects/-${PROJ_KEY}/memory"
 node "$MEM" --dir="$MEM_DIR" workstreams
 ```
