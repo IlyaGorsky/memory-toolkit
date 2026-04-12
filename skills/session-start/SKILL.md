@@ -175,3 +175,4 @@ This allows `/session-restore search SESSION_START` to find all session entry po
 - If there are blocked tasks (waiting for mockups/backend) — note them, do not suggest
 - When a workstream argument is provided — go deeper into context immediately, without a general overview
 - If the previous session ended with compact — check what the last action was via `/session-restore`
+- **Never skip Step 1 workstream menu**, even when startup hook context is available in system prompt. Hook context enriches Step 4 candidates — it does not replace the explicit selection step. The user must choose the workstream, not the assistant.

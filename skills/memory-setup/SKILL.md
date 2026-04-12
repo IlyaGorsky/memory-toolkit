@@ -48,7 +48,8 @@ If `--fresh` argument or no `$MEM_DIR`:
 5. Ask: "What language do you prefer for documentation and rules? (e.g. English, Russian)" → create `profile/language.md`
 6. Ask: "Key links (Jira, Figma, Slack, docs)?" → create `reference/links.md`
 7. Create MEMORY.md from template (see Step 4)
-8. Create subdirectories: `mkdir -p "$MEM_DIR"/{feedback,decisions,profile,reference,notes,workstreams}`
+8. Copy memory-schema.json: `cp "${CLAUDE_PLUGIN_ROOT}/scripts/lib/memory-schema.default.json" "$MEM_DIR/memory-schema.json"`
+9. Create subdirectories: `mkdir -p "$MEM_DIR"/{feedback,decisions,profile,reference,notes,workstreams}`
 
 ### B) Existing MEMORY.md → upgrade in place
 
@@ -82,6 +83,7 @@ Proposed changes:
   [ ] Add Rules block to MEMORY.md  
   [ ] Add Session lifecycle block to MEMORY.md
   [ ] Create workstreams.json from existing files
+  [ ] Create memory-schema.json (weighted eviction config)
   [ ] Create subdirectories (feedback/, decisions/, etc.)
   [ ] Move files to subdirectories by type
 
@@ -197,7 +199,20 @@ type: reference → reference/
 
 After moving files — update paths in MEMORY.md index.
 
-### 4e: Verify
+### 4f: Create memory-schema.json
+
+If `memory-schema.json` is missing in `$MEM_DIR`:
+
+```bash
+if [ -f "${CLAUDE_PLUGIN_ROOT}/scripts/lib/memory-schema.default.json" ]; then
+  cp "${CLAUDE_PLUGIN_ROOT}/scripts/lib/memory-schema.default.json" "$MEM_DIR/memory-schema.json"
+  echo "Created memory-schema.json (weighted eviction config)"
+fi
+```
+
+This file controls section protection and eviction weights for `memory.js reindex`. Never overwrite if it already exists — user may have customized it.
+
+### 4g: Verify
 
 ```bash
 node "$MEM_DIR/memory.js" --dir="$MEM_DIR" list
@@ -224,34 +239,35 @@ Ready to use:
 
 ---
 
-## Step 6: Auto-memory protection (optional)
+## Step 6: Mode selection (optional)
 
-Explain the 200-line limit to the user and offer protection options:
+Explain the two modes and let the user choose. **Default is Collaborative — no action required.**
 
 ```
-## Auto-memory protection
+## Memory mode
 
-Claude Code's auto-memory writes to MEMORY.md automatically. The file is 
-truncated after 200 lines — anything below line 200 silently disappears 
-from context.
+memory-toolkit works alongside Claude Code's built-in auto-memory.
+Two modes available:
 
-Your MEMORY.md is currently {N} lines. Options:
+1. Collaborative (default, already active)
+   CC auto-memory captures facts automatically.
+   memory-toolkit organizes them into workstreams, lifecycle, handoffs.
+   Both write to MEMORY.md — they complement each other.
 
-1. Keep as-is — auto-memory enabled, Rules block is at the top (safe)
-2. Disable auto-memory — plugin handles memory, no auto-writes:
+2. Exclusive (opt-in)
+   Only memory-toolkit manages memory. No auto-writes from CC.
+   Full control over format. Requires manual discipline.
    Add to settings.json: { "autoMemoryEnabled": false }
-3. Trim index — move old entries to archive, keep MEMORY.md under 150 lines
 
-Which do you prefer? (1/2/3 or skip)
+Your MEMORY.md is currently {N} lines (limit: 200).
+{If >150: ⚠ Consider trimming — run /memory workstreams to see what's there.}
+
+Stay in Collaborative mode? (press Enter to skip, or type "exclusive" to opt in)
 ```
 
-If user chooses 2:
-```json
-// Add to ~/.claude/settings.json or .claude/settings.json
-{ "autoMemoryEnabled": false }
-```
+Only switch to Exclusive if user explicitly requests it. Warn: "Auto-memory will no longer write to MEMORY.md — memory-toolkit handles everything."
 
-If user chooses 3 — identify entries that can be removed (old, superseded, or redundant) and propose which to cut. Move to `memory-backup/` rather than deleting.
+If user wants to trim — identify entries that can be removed (old, superseded, redundant) and propose which to cut. Move to `memory-backup/` rather than deleting.
 
 ---
 
