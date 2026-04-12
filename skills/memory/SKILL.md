@@ -3,7 +3,6 @@ name: memory
 description: Project memory — search, workstreams, notes, decisions. Auto-initializes on first use.
 user-invocable: true
 argument-hint: "<command> [args] [--brief] — search <query> | workstream <name> | workstreams | add-workstream <name> <kw...> | recent [n] | decisions [topic] | list | note <text>"
-allowed-tools: Bash,Read,Write,Glob,Grep
 ---
 
 # /memory — Project Memory
