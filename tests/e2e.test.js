@@ -271,6 +271,31 @@ describe('e2e: isolated sandbox', () => {
     });
   });
 
+  // --- Configurable targets (no hardcoded destinations) ---
+
+  describe('skills ask before writing to project files', () => {
+    it('reflect does not hardcode backlog.md as only option', () => {
+      const content = fs.readFileSync(
+        path.join(PLUGIN_ROOT, 'skills', 'reflect', 'SKILL.md'), 'utf8'
+      );
+      // Should mention detection/asking, not just "Read: backlog.md"
+      assert.ok(
+        content.includes('backlog_target') || content.includes('Where do you track'),
+        'reflect should detect or ask for backlog location'
+      );
+    });
+
+    it('docs-reflect does not hardcode .claude/rules/ as only option', () => {
+      const content = fs.readFileSync(
+        path.join(PLUGIN_ROOT, 'skills', 'docs-reflect', 'SKILL.md'), 'utf8'
+      );
+      assert.ok(
+        content.includes('docs_target') || content.includes('Where should'),
+        'docs-reflect should detect or ask for rules location'
+      );
+    });
+  });
+
   // --- Path integrity ---
 
   describe('no hardcoded paths in skills', () => {

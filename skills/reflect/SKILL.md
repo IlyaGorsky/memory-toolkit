@@ -7,15 +7,34 @@ argument-hint: ""
 
 # Reflect — session reflection
 
-Analyze current session and propose additions to `backlog.md`.
+Analyze current session and propose additions to the project backlog.
 
-## 1. Read context
+## 1. Find backlog target
+
+Check memory for saved preference:
+```bash
+node "$MEM" --dir="$MEM_DIR" search "backlog_target"
+```
+
+If no saved preference — detect automatically:
+1. Check common locations: `backlog.md`, `TODO.md`, `TODO`, `docs/backlog.md`
+2. Check if project uses GitHub Issues: `gh issue list --limit 1 2>/dev/null`
+3. If nothing found — ask:
 
 ```
-Read: backlog.md
+Where do you track backlog?
+  1. backlog.md (will create)
+  2. TODO.md
+  3. GitHub Issues (gh issue create)
+  4. Other — specify path or tool
 ```
 
-Read current backlog to avoid duplicates. If no backlog.md exists, create it.
+Save preference:
+```bash
+node "$MEM" --dir="$MEM_DIR" note "CONFIG: backlog_target=<chosen path or github-issues>"
+```
+
+Read current backlog to avoid duplicates.
 
 ## 2. Analyze session
 
@@ -44,14 +63,13 @@ Show list in format:
 - (nothing found / everything already in backlog)
 ```
 
-**Do NOT write to backlog.md yet.** Show user, wait for confirmation.
+**Do NOT write yet.** Show user, wait for confirmation.
 
 ## 4. After confirmation
 
-Update `backlog.md`:
-- New items → appropriate section (determine by domain)
-- Closed items → `[x]`
-- New section if needed
+Update the backlog target:
+- **File-based** (backlog.md, TODO.md, etc.): add items to appropriate section, mark closed with `[x]`
+- **GitHub Issues**: `gh issue create --title "<item>" --body "<why>"` for each new item; `gh issue close <number>` for closed
 
 Also save insights to memory:
 ```bash

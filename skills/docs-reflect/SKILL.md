@@ -57,9 +57,9 @@ If a note can't be generalized — skip it.
 
 ---
 
-## Step 3: Route to target files
+## Step 3: Detect documentation structure and route
 
-Scan existing documentation:
+### 3a: Detect existing structure
 
 ```bash
 ls .claude/rules/ 2>/dev/null
@@ -67,20 +67,43 @@ cat CLAUDE.md 2>/dev/null | head -50
 ls docs/ 2>/dev/null
 ```
 
-Route by domain (from DOC: note prefix):
+Check memory for saved preference:
+```bash
+node "$MEM" --dir="$MEM_DIR" search "docs_target"
+```
+
+### 3b: Choose target
+
+If no saved preference and no `.claude/rules/` directory — ask:
+
+```
+Where should project rules go?
+  1. .claude/rules/ (Claude Code loads these per-directory)
+  2. docs/
+  3. CLAUDE.md (single file, always loaded — use sparingly)
+  4. Other — specify path
+
+Choice? (default: 1)
+```
+
+Save preference:
+```bash
+node "$MEM" --dir="$MEM_DIR" note "CONFIG: docs_target=<chosen path>"
+```
+
+### 3c: Route by domain
+
+Route using the chosen target directory (default: `.claude/rules/`):
 
 | Domain | Target |
 |--------|--------|
-| testing | `.claude/rules/testing.md` |
-| api | `.claude/rules/api.md` |
-| architecture | `.claude/rules/architecture.md` |
-| state | `.claude/rules/state.md` |
-| workflow | `.claude/rules/workflow.md` |
-| Other domain | `.claude/rules/<domain>.md` |
-| Feature docs | `docs/<feature>.md` |
+| testing | `<target>/testing.md` |
+| api | `<target>/api.md` |
+| architecture | `<target>/architecture.md` |
+| state | `<target>/state.md` |
+| workflow | `<target>/workflow.md` |
+| Other domain | `<target>/<domain>.md` |
 | Truly universal (rare) | `CLAUDE.md` |
-
-Prefer `.claude/rules/` — loaded selectively. CLAUDE.md is loaded every request.
 
 If a matching file exists — add to it. If not — create one.
 
@@ -93,11 +116,11 @@ If a matching file exists — add to it. If not — create one.
 
 Found N DOC: notes, grouped into M domains:
 
-### .claude/rules/testing.md
+### <target>/testing.md
 - <rule 1>
 - <rule 2>
 
-### .claude/rules/api.md
+### <target>/api.md
 - <rule 3>
 
 ### Skipped
@@ -118,18 +141,11 @@ For each approved rule:
 2. Add rule to appropriate section
 3. Format:
 
-For `.claude/rules/`:
+For rule files (`.claude/rules/`, `docs/`, or custom target):
 ```markdown
 ## <Section>
 
 - <Rule>
-```
-
-For `docs/`:
-```markdown
-## <Title>
-
-<2-5 sentences explaining the decision/pattern and why>
 ```
 
 ---
