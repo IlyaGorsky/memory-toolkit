@@ -30,9 +30,14 @@ const DIRS = {
 
 // Load workstreams from workstreams.json (created by /memory-init)
 const workstreamsPath = path.join(MEMORY_DIR, 'workstreams.json');
-const WORKSTREAM_ALIASES = fs.existsSync(workstreamsPath)
-    ? JSON.parse(fs.readFileSync(workstreamsPath, 'utf-8'))
-    : {};
+let WORKSTREAM_ALIASES = {};
+try {
+    if (fs.existsSync(workstreamsPath)) {
+        WORKSTREAM_ALIASES = JSON.parse(fs.readFileSync(workstreamsPath, 'utf-8'));
+    }
+} catch {
+    process.stderr.write('[memory] workstreams.json is corrupted, using empty aliases\n');
+}
 
 // --- Core ---
 

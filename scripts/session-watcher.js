@@ -168,7 +168,7 @@ function callCLI(conversationText) {
   try {
     const prompt = `${ANALYSIS_PROMPT}\n\n---\n\n${conversationText}`;
     const result = execSync(
-      'claude -p --model haiku --output-format text --disable-slash-commands',
+      'claude -p --model claude-haiku-4-5-20251001 --output-format text --disable-slash-commands',
       { input: prompt, timeout: 30000, encoding: 'utf8', maxBuffer: 1024 * 1024 }
     );
     return parseFindings(result);

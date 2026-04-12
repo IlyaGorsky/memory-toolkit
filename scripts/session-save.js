@@ -11,7 +11,7 @@ const { findMemoryDirOrExit } = require('./lib/find-memory-dir');
 // Read stdin (hook passes JSON with session_id)
 let sessionId = 'unknown';
 try {
-  const stdin = fs.readFileSync('/dev/stdin', 'utf8');
+  const stdin = fs.readFileSync(0, 'utf8'); // fd 0 = stdin, cross-platform
   const data = JSON.parse(stdin);
   sessionId = data.session_id || 'unknown';
 } catch {}
@@ -53,7 +53,9 @@ type: project
 _This handoff was auto-saved by PreCompact hook. Use /session-continue to resume._
 `;
 
-fs.writeFileSync(handoffPath, handoff, 'utf8');
+const handoffTmp = handoffPath + '.tmp';
+fs.writeFileSync(handoffTmp, handoff, 'utf8');
+fs.renameSync(handoffTmp, handoffPath); // atomic on POSIX
 
 // Also log to daily notes
 const notesDir = path.join(memoryDir, 'notes');

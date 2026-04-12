@@ -10,7 +10,7 @@ const { findMemoryDirOrExit } = require('./lib/find-memory-dir');
 // Read stdin (hook passes JSON)
 let stdin = '';
 try {
-  stdin = fs.readFileSync('/dev/stdin', 'utf8');
+  stdin = fs.readFileSync(0, 'utf8'); // fd 0 = stdin, cross-platform
 } catch {}
 
 let sessionId = 'unknown';
@@ -45,7 +45,7 @@ if (fs.existsSync(notePath)) {
   fs.writeFileSync(notePath, `---\nname: Notes ${today}\ndescription: Session notes ${today}\ntype: project\n---\n\n# ${today}\n\n${entry}`);
 }
 
-// Also write session index for quick lookup
+// Also write session index for quick lookup (deduplicate by session_id)
 const sessionsPath = path.join(memoryDir, 'sessions.jsonl');
 const record = JSON.stringify({
   id: sessionId,
@@ -53,7 +53,10 @@ const record = JSON.stringify({
   branch,
   transcript: transcriptPath,
 }) + '\n';
-fs.appendFileSync(sessionsPath, record);
+const existing = fs.existsSync(sessionsPath) ? fs.readFileSync(sessionsPath, 'utf8') : '';
+if (!existing.includes(`"id":"${sessionId}"`)) {
+  fs.appendFileSync(sessionsPath, record);
+}
 
 // Output handoff to stdout (shown to user via hook)
 const handoffPath = path.join(memoryDir, 'workstreams', 'handoff.md');
