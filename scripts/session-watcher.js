@@ -242,6 +242,12 @@ function findMemoryJs() {
   return null;
 }
 
+// --- JSON output helpers ---
+function exitJson(obj = {}) {
+  process.stdout.write(JSON.stringify(obj) + '\n');
+  process.exit(0);
+}
+
 // --- Main ---
 async function main() {
   const state = loadState();
@@ -249,12 +255,12 @@ async function main() {
 
   // Throttle
   if (now - state.lastRun < THROTTLE_MS) {
-    process.exit(0);
+    exitJson();
   }
 
   // Find transcript
   const transcriptPath = findTranscript();
-  if (!transcriptPath) process.exit(0);
+  if (!transcriptPath) exitJson();
 
   // Reset offset if transcript changed
   const offset = (transcriptPath === state.transcriptPath) ? state.offset : 0;
@@ -271,7 +277,7 @@ async function main() {
 
   // Need minimum messages to analyze
   if (messages.length < MIN_NEW_MESSAGES) {
-    process.exit(0);
+    exitJson();
   }
 
   // Analyze with LLM
@@ -280,8 +286,12 @@ async function main() {
 
   if (findings && findings.length) {
     saveFindings(findings);
-    process.stderr.write(`[watcher] ${findings.length} finding(s): ${findings.map(f => `${f.type}: ${f.summary}`).join('; ')}\n`);
+    const summary = findings.map(f => `${f.type}: ${f.summary}`).join('; ');
+    process.stderr.write(`[watcher] ${findings.length} finding(s): ${summary}\n`);
+    exitJson({ systemMessage: `[memory-toolkit watcher] ${findings.length} finding(s) saved` });
+  } else {
+    exitJson();
   }
 }
 
-main().catch(() => process.exit(0));
+main().catch(() => exitJson());

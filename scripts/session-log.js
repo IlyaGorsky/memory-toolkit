@@ -58,13 +58,6 @@ if (!existing.includes(`"id":"${sessionId}"`)) {
   fs.appendFileSync(sessionsPath, record);
 }
 
-// Output handoff to stdout (shown to user via hook)
-const handoffPath = path.join(memoryDir, 'workstreams', 'handoff.md');
-if (fs.existsSync(handoffPath)) {
-  process.stdout.write(fs.readFileSync(handoffPath, 'utf8'));
-  process.stdout.write('\n');
-}
-
 // Update MEMORY.md API block if version is stale (AP-20)
 const memoryMdPath = path.join(memoryDir, 'MEMORY.md');
 if (fs.existsSync(memoryMdPath)) {
@@ -79,8 +72,25 @@ if (fs.existsSync(memoryMdPath)) {
   }
 }
 
-// Remind agent to track documentation-worthy findings
-process.stdout.write([
+// Build JSON output for CC hook protocol
+const output = {};
+
+// Status line (visible in UI)
+const version = (() => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), 'utf8'));
+    return pkg.version || '';
+  } catch { return ''; }
+})();
+output.systemMessage = `[memory-toolkit${version ? ' v' + version : ''}] session logged | branch: ${branch || 'unknown'}`;
+
+// Context injection: handoff + DOC reminder
+let context = '';
+const handoffPath = path.join(memoryDir, 'workstreams', 'handoff.md');
+if (fs.existsSync(handoffPath)) {
+  context += fs.readFileSync(handoffPath, 'utf8') + '\n';
+}
+context += [
   '---',
   'During this session, mark documentation-worthy findings:',
   '  /memory note "DOC: <domain> — <insight>"',
@@ -89,5 +99,11 @@ process.stdout.write([
   '  /memory note "DOC: architecture — webhook handlers must be idempotent"',
   'At session end, /docs-reflect will collect DOC: notes and propose repo documentation.',
   '---',
-  '',
-].join('\n'));
+].join('\n');
+
+output.hookSpecificOutput = {
+  hookEventName: 'SessionStart',
+  additionalContext: context,
+};
+
+process.stdout.write(JSON.stringify(output) + '\n');

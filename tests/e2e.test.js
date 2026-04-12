@@ -122,9 +122,14 @@ describe('e2e: isolated sandbox', () => {
       assert.equal(record.id, 'e2e-001');
     });
 
-    it('outputs DOC reminder', () => {
+    it('outputs valid JSON with systemMessage and additionalContext', () => {
       const out = sessionLogRun({ session_id: 'e2e-002' });
-      assert.ok(out.includes('DOC:'));
+      const json = JSON.parse(out.trim());
+      assert.ok(json.systemMessage, 'should have systemMessage');
+      assert.ok(json.systemMessage.includes('memory-toolkit'), 'systemMessage should mention plugin');
+      assert.ok(json.hookSpecificOutput, 'should have hookSpecificOutput');
+      assert.equal(json.hookSpecificOutput.hookEventName, 'SessionStart');
+      assert.ok(json.hookSpecificOutput.additionalContext.includes('DOC:'), 'context should include DOC reminder');
     });
 
     it('updates stale MEMORY.md API block (AP-20)', () => {
@@ -221,8 +226,9 @@ describe('e2e: isolated sandbox', () => {
           env: { ...process.env, HOME: fakeHome },
         }
       );
-      // No crash, no output = throttle worked
-      assert.equal(result.trim(), '');
+      // Throttled — should output empty JSON
+      const json = JSON.parse(result.trim());
+      assert.deepEqual(json, {});
     });
 
     it('prompt includes documentation type', () => {
