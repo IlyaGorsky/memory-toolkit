@@ -16,6 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const { loadSchema, calculateWeight, incrementHits, rebuildIndex } = require('./lib/weight');
+const log = require('./lib/log');
 
 // Support --dir=<path> for symlink/plugin usage, fallback to __dirname
 const dirArg = process.argv.find(a => a.startsWith('--dir='));
@@ -37,8 +38,8 @@ try {
     if (fs.existsSync(workstreamsPath)) {
         WORKSTREAM_ALIASES = JSON.parse(fs.readFileSync(workstreamsPath, 'utf-8'));
     }
-} catch {
-    process.stderr.write('[memory] workstreams.json is corrupted, using empty aliases\n');
+} catch (e) {
+    log.warn('workstreams.json corrupted, using empty aliases', { path: workstreamsPath, error: e.message });
 }
 
 // --- Core ---
@@ -468,7 +469,8 @@ function reindex() {
             const fm = parseFrontmatter(fileContent);
             const stat = fs.statSync(fullPath);
             return calculateWeight({ frontmatter: fm, mtime: stat.mtime }, schema.weight);
-        } catch {
+        } catch (e) {
+            log.debug('weight calc failed', { file: fullPath, error: e.message });
             return 0;
         }
     }
