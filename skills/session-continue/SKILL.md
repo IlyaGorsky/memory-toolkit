@@ -14,8 +14,9 @@ Pick up a workstream without a full cold start. For cases when you know what you
 ## Step 1: Find handoff
 
 ```bash
-MEM=$(find ~/.claude/projects -maxdepth 3 -name "memory.js" -path "*/memory/*" 2>/dev/null | head -1)
-MEM_DIR=$(dirname "$MEM")
+MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
+PROJ_KEY=$(pwd | tr '/' '-' | sed 's/^-//')
+MEM_DIR="$HOME/.claude/projects/-${PROJ_KEY}/memory"
 cat "$MEM_DIR/workstreams/handoff.md" 2>/dev/null || echo "NO_HANDOFF"
 ```
 

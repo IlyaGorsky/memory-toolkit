@@ -102,25 +102,9 @@ Wait for user confirmation before making changes.
 
 ### 4a: Resolve memory.js path
 
-Find memory.js — plugin install path first, then local copy:
-
 ```bash
-PLUGIN_MEM=$(claude plugin list --json 2>/dev/null | node -e "
-  try { const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-  const p=d.find(x=>x.id.includes('memory-toolkit'));
-  if(p)console.log(p.installPath+'/scripts/memory.js') } catch{}" 2>/dev/null)
-
-if [ -n "$PLUGIN_MEM" ] && [ -f "$PLUGIN_MEM" ]; then
-  MEM="$PLUGIN_MEM"
-elif [ -f "$MEM_DIR/memory.js" ]; then
-  MEM="$MEM_DIR/memory.js"
-else
-  MEM=$(find ~/.claude/plugins/cache -name "memory.js" -path "*/memory-toolkit/*/scripts/*" 2>/dev/null | head -1)
-fi
+MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
 ```
-
-**Do NOT copy** `memory.js` if the plugin is installed — use the resolved `$MEM` path.
-Only copy as last resort if plugin is not installed and no `$MEM` found.
 
 Use `$MEM` as an absolute path when writing the API block into MEMORY.md.
 

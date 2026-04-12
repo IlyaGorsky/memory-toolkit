@@ -17,26 +17,13 @@ Read MEMORY.md (context map).
 
 If a workstream argument is provided — load details immediately and go to Step 3.
 
-If no argument is provided — find memory.js for the current project:
+If no argument is provided — resolve paths and show workstreams:
 
 ```bash
-# Resolve memory dir from cwd
+MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
 PROJ_KEY=$(pwd | tr '/' '-' | sed 's/^-//')
 MEM_DIR="$HOME/.claude/projects/-${PROJ_KEY}/memory"
-# Fallback: try parent dirs
-if [ ! -f "$MEM_DIR/memory.js" ]; then
-  for dir in $(find ~/.claude/projects -maxdepth 3 -name "memory.js" -path "*/memory/*" 2>/dev/null); do
-    MEM_DIR=$(dirname "$dir")
-    break
-  done
-fi
-MEM="$MEM_DIR/memory.js"
-```
-
-Show workstreams:
-
-```bash
-node "$MEM" workstreams
+node "$MEM" --dir="$MEM_DIR" workstreams
 ```
 
 Show menu:
