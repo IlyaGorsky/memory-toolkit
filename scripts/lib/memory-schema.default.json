@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "max_lines": 200,
+  "sections": [
+    {
+      "name": "API",
+      "heading": "## API",
+      "protected": true,
+      "description": "Path to memory.js CLI. Without this, all skills break."
+    },
+    {
+      "name": "Rules",
+      "heading": "## Rules",
+      "protected": true,
+      "description": "Self-instructions for Claude: what to save, format, session lifecycle."
+    },
+    {
+      "name": "Feedback",
+      "heading": "## Feedback",
+      "protected": false,
+      "sort": "weight",
+      "description": "Corrections and confirmed approaches. High-value entries persist."
+    },
+    {
+      "name": "Reference",
+      "heading": "## Reference",
+      "protected": false,
+      "sort": "weight",
+      "description": "External links, dashboards, research notes."
+    },
+    {
+      "name": "Notes",
+      "heading": "## Notes",
+      "protected": false,
+      "sort": "weight",
+      "description": "Daily notes, ideas, parked thoughts. Most volatile."
+    },
+    {
+      "name": "Backlog",
+      "heading": "## Backlog",
+      "protected": false,
+      "sort": "weight",
+      "description": "Planned work items."
+    }
+  ],
+  "weight": {
+    "type_base": {
+      "decision": 10,
+      "feedback": 8,
+      "reference": 5,
+      "project": 3,
+      "user": 3,
+      "note": 2
+    },
+    "decay_half_life_days": 90,
+    "formula": "type_base * log(hits + 1) * exp(-age_days / half_life)"
+  }
+}

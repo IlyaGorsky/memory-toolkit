@@ -8,12 +8,14 @@
  *   node memory.js recent [n]           — last N feedback files (default: 5)
  *   node memory.js workstream <name>    — all files related to a workstream
  *   node memory.js decisions [topic]    — decisions (Why/How to apply blocks)
- *   node memory.js list [type]          — list files (workstreams|feedback|decisions|profile|reference|all)
+ *   node memory.js list [type]          — list files (workstreams|feedback|decisions|profile|reference|notes|all)
  *   node memory.js docs                 — collect DOC: notes from daily notes
+ *   node memory.js reindex              — rebuild MEMORY.md index sorted by weight (evicts low-weight entries if over 200 lines)
  */
 
 const fs = require('fs');
 const path = require('path');
+const { loadSchema, calculateWeight, incrementHits, rebuildIndex } = require('./lib/weight');
 
 // Support --dir=<path> for symlink/plugin usage, fallback to __dirname
 const dirArg = process.argv.find(a => a.startsWith('--dir='));
@@ -150,12 +152,21 @@ function filterByDirs(files, dirs) {
     return files.filter(f => dirs.some(d => f.name.startsWith(d + '/')));
 }
 
+// --- Hit tracking ---
+
+function trackHits(files) {
+    for (const f of files) {
+        if (f.path) incrementHits(f.path);
+    }
+}
+
 // --- CLI output ---
 
 function printSearch(query) {
     const results = querySearch(query);
     if (!query) return console.log('Usage: memory.js search <query>');
     if (!results.length) return console.log(`Nothing found for "${query}"`);
+    trackHits(results.map(r => ({ path: path.join(MEMORY_DIR, r.name) })));
     results.forEach(r => {
         console.log(`\n## ${r.name} (${r.type || '?'})`);
         r.matches.forEach(m => console.log(`  L${m.line}: ${m.text.trim()}`));
@@ -165,6 +176,7 @@ function printSearch(query) {
 function printRecent(n = 5) {
     const files = queryRecent(n);
     if (!files.length) return console.log('No feedback files found');
+    trackHits(files);
     files.forEach(f => {
         const desc = f.frontmatter.description || '';
         const date = f.mtime.toISOString().slice(0, 10);
@@ -181,6 +193,7 @@ function printWorkstream(...args) {
     let files = queryWorkstream(name);
     files = filterByDirs(files, flags.only);
     if (!files.length) return console.log(`No files found for workstream "${name}"${flags.only ? ` (only: ${flags.only})` : ''}`);
+    trackHits(files);
     console.log(`\n# Workstream: ${name} (${files.length} files)\n`);
     files.forEach(f => {
         const type = f.frontmatter.type || '?';
@@ -199,6 +212,7 @@ function printDecisions(...args) {
     const topic = positional[0];
     const results = queryDecisions(topic);
     if (!results.length) return console.log(`No decisions found${topic ? ` for "${topic}"` : ''}`);
+    trackHits(results);
     console.log(`\n# Decisions${topic ? `: ${topic}` : ''} (${results.length})\n`);
     results.forEach(r => {
         console.log(`## ${r.name} (${r.frontmatter.type})`);
@@ -436,6 +450,42 @@ function listWorkstreams() {
     console.log(`\n  ➕ Add new: memory.js add-workstream <name> <keywords...>`);
 }
 
+// --- Reindex ---
+
+function reindex() {
+    const memoryMdPath = path.join(MEMORY_DIR, 'MEMORY.md');
+    if (!fs.existsSync(memoryMdPath)) return console.log('No MEMORY.md found');
+
+    const content = fs.readFileSync(memoryMdPath, 'utf-8');
+    const schema = loadSchema(MEMORY_DIR);
+
+    // Weight function: resolve relative path → file → calculate weight
+    function getFileWeight(relativePath) {
+        const fullPath = path.join(MEMORY_DIR, relativePath);
+        if (!fs.existsSync(fullPath)) return 0;
+        try {
+            const fileContent = fs.readFileSync(fullPath, 'utf-8');
+            const fm = parseFrontmatter(fileContent);
+            const stat = fs.statSync(fullPath);
+            return calculateWeight({ frontmatter: fm, mtime: stat.mtime }, schema.weight);
+        } catch {
+            return 0;
+        }
+    }
+
+    const linesBefore = content.split('\n').length;
+    const rebuilt = rebuildIndex(content, schema, getFileWeight);
+    const linesAfter = rebuilt.split('\n').length;
+
+    // Atomic write
+    const tmp = memoryMdPath + '.tmp';
+    fs.writeFileSync(tmp, rebuilt, 'utf-8');
+    fs.renameSync(tmp, memoryMdPath);
+
+    const evicted = linesBefore - linesAfter;
+    console.log(`Reindexed MEMORY.md: ${linesAfter} lines${evicted > 0 ? ` (${evicted} low-weight entries evicted)` : ''}`);
+}
+
 // --- Router ---
 
 const commands = {
@@ -450,6 +500,7 @@ const commands = {
     workstreams: listWorkstreams,
     docs: printDocs,
     recurring: printRecurring,
+    reindex,
     dir: () => console.log(MEMORY_DIR),
 };
 
@@ -471,6 +522,7 @@ if (require.main === module) {
         console.log('  note <text>            — quick note');
         console.log('  docs                   — collect DOC: notes');
         console.log('  recurring              — find recurring feedback patterns');
+        console.log('  reindex                — rebuild MEMORY.md index sorted by weight');
         console.log('  dir                    — memory directory path');
     } else {
         commands[cmd](...args);
