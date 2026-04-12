@@ -65,6 +65,20 @@ if (fs.existsSync(handoffPath)) {
   process.stdout.write('\n');
 }
 
+// Update MEMORY.md API block if version is stale (AP-20)
+const memoryMdPath = path.join(memoryDir, 'MEMORY.md');
+if (fs.existsSync(memoryMdPath)) {
+  const currentScriptPath = path.join(__dirname, 'memory.js');
+  let memContent = fs.readFileSync(memoryMdPath, 'utf8');
+  const updated = memContent.replace(
+    /node [^\s`]+\/memory-toolkit\/[^\s`]+\/scripts\/memory\.js/g,
+    `node ${currentScriptPath}`
+  );
+  if (updated !== memContent) {
+    fs.writeFileSync(memoryMdPath, updated);
+  }
+}
+
 // Remind agent to track documentation-worthy findings
 process.stdout.write([
   '---',

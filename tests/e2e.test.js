@@ -126,6 +126,31 @@ describe('e2e: isolated sandbox', () => {
       const out = sessionLogRun({ session_id: 'e2e-002' });
       assert.ok(out.includes('DOC:'));
     });
+
+    it('updates stale MEMORY.md API block (AP-20)', () => {
+      // Write MEMORY.md with an old version path
+      const memoryMdPath = path.join(memoryDir, 'MEMORY.md');
+      fs.writeFileSync(memoryMdPath, [
+        '# Test Memory',
+        '## API',
+        '```bash',
+        'node /old/path/memory-toolkit/0.0.1/scripts/memory.js --dir=/some/dir <command>',
+        '```',
+      ].join('\n'));
+
+      sessionLogRun({ session_id: 'e2e-ap20' });
+
+      const updated = fs.readFileSync(memoryMdPath, 'utf8');
+      // Should contain current script path, not old one
+      assert.ok(
+        !updated.includes('0.0.1'),
+        'old version should be replaced'
+      );
+      assert.ok(
+        updated.includes(path.join(PLUGIN_ROOT, 'scripts', 'memory.js')),
+        'should contain current memory.js path'
+      );
+    });
   });
 
   // --- Path integrity ---
