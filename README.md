@@ -2,19 +2,18 @@
 
 **CLAUDE.md is for your codebase. Not for your sessions.**
 
-People stuff session state into CLAUDE.md because there's nowhere else to put it. It works until it doesn't — size limit, goes stale, resets every session, mixes personal state with team conventions.
+People stuff session state into CLAUDE.md because there's nowhere else to put it. But CLAUDE.md is static — it doesn't know what you did today, what you decided, or where you stopped. And every conversation context you build up gets destroyed at compaction.
 
 memory-toolkit is the session layer that should have existed alongside CLAUDE.md from the start.
 
 Built for tech leads who run multiple workstreams in parallel.
 
 ```bash
-git clone https://github.com/IlyaGorsky/memory-toolkit.git
-claude plugin marketplace add ./memory-toolkit
+claude plugin marketplace add IlyaGorsky/memory-toolkit
 claude plugin install memory-toolkit
 ```
 
-See [INSTALL.md](INSTALL.md) for other methods (per-session, manual copy, existing auto-memory migration).
+See [INSTALL.md](INSTALL.md) for other methods (local clone for contributors, per-session, manual copy, existing auto-memory migration).
 
 ## The problem
 
@@ -30,14 +29,15 @@ memory-toolkit fixes all three with hooks that fire at the right moment — not 
 
 ## Why not just CLAUDE.md?
 
-CLAUDE.md is designed for your codebase — conventions, architecture, commands. People stuff session state into it because there's nowhere else to put it. It breaks down fast:
+CLAUDE.md is designed for your codebase — conventions, architecture, commands. It's reloaded from disk on every turn and survives compaction just fine. But it's the wrong tool for session state:
 
-- loaded once at session start, never updates mid-session
-- hits ~25KB limit before truncation silently pushes out your rules
 - no structure for "where did I stop", "what did I decide yesterday", "which idea did I park"
-- shared and committed — personal state and team conventions don't belong together
+- shared and committed — personal session state and team conventions don't belong together
+- static by design — it doesn't capture decisions, corrections, or context as you work
 
-memory-toolkit handles what CLAUDE.md was never designed to do.
+What compaction actually destroys is your **conversation context** — every file Claude read, every decision you discussed, every in-progress plan. CLAUDE.md rules survive; the session doesn't.
+
+memory-toolkit saves the session.
 
 ## What this plugin does
 
