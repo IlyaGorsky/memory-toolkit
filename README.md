@@ -19,7 +19,7 @@ See [INSTALL.md](INSTALL.md) for other methods (local clone for contributors, pe
 
 Three documented pain points this plugin solves:
 
-**1. Compaction silently destroys context** — you're 4 hours into an auth refactor, compaction fires, Claude forgets every architectural decision you made together. Starting over takes 45 minutes and never fully recovers. ([real report](https://dev.to/gonewx/claude-code-lost-my-4-hour-session-heres-the-0-fix-that-actually-works-24h6))
+**1. Compaction silently destroys context** — you're 4 hours into an auth refactor, compaction fires, and your entire conversation history is compressed into a few paragraphs by a single inference call. Claude Code restores up to 5 recently-read files (50K token budget) — if you read 30 files in those 4 hours, 25 are gone from context. Starting over takes 45 minutes and never fully recovers. ([real report](https://dev.to/gonewx/claude-code-lost-my-4-hour-session-heres-the-0-fix-that-actually-works-24h6))
 
 **2. `--resume` doesn't actually restore context** — `claude --continue` and `claude --resume` start fresh. All accumulated context — files read, decisions made, in-progress work state — is irrecoverable. ([issue #43696](https://github.com/anthropics/claude-code/issues/43696))
 
@@ -34,6 +34,7 @@ CLAUDE.md is designed for your codebase — conventions, architecture, commands.
 - no structure for "where did I stop", "what did I decide yesterday", "which idea did I park"
 - shared and committed — personal session state and team conventions don't belong together
 - static by design — it doesn't capture decisions, corrections, or context as you work
+- 40KB total limit across all CLAUDE.md levels (managed + user + project + `.claude/rules/*`)
 
 What compaction actually destroys is your **conversation context** — every file Claude read, every decision you discussed, every in-progress plan. CLAUDE.md rules survive; the session doesn't.
 
