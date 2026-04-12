@@ -153,6 +153,99 @@ describe('e2e: isolated sandbox', () => {
     });
   });
 
+  // --- session-watcher.js plumbing ---
+
+  describe('session-watcher.js plumbing (no LLM)', () => {
+    it('finds transcript from sessions.jsonl and parses messages', () => {
+      // Ensure sessions.jsonl has an entry with transcript path
+      const sessionsPath = path.join(memoryDir, 'sessions.jsonl');
+      const transcriptPath = path.join(sandbox, 'transcript.jsonl');
+
+      // Write a fake transcript with enough messages
+      const messages = [];
+      for (let i = 0; i < 8; i++) {
+        messages.push(JSON.stringify({
+          type: i % 2 === 0 ? 'user' : 'assistant',
+          message: { content: [{ type: 'text', text: `Message ${i}` }] },
+        }));
+      }
+      fs.writeFileSync(transcriptPath, messages.join('\n') + '\n');
+
+      // Write sessions.jsonl entry pointing to transcript
+      fs.writeFileSync(sessionsPath,
+        JSON.stringify({ id: 'watcher-test', transcript: transcriptPath }) + '\n'
+      );
+
+      // Reset watcher state so it doesn't throttle
+      const statePath = path.join(memoryDir, '.watcher-state.json');
+      fs.writeFileSync(statePath, JSON.stringify({ offset: 0, lastRun: 0, transcriptPath: '' }));
+
+      // Run watcher — will fail at LLM call (no API key, no claude CLI in sandbox)
+      // but should NOT crash before reaching the LLM call
+      try {
+        execSync(
+          `node "${path.join(PLUGIN_ROOT, 'scripts', 'session-watcher.js')}"`,
+          {
+            encoding: 'utf8',
+            timeout: 10000,
+            cwd: projectDir,
+            env: { ...process.env, HOME: fakeHome, ANTHROPIC_API_KEY: '' },
+          }
+        );
+      } catch {
+        // Expected: LLM call fails, but plumbing worked
+      }
+
+      // Verify: watcher state was updated (means it got past transcript parsing)
+      const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+      assert.ok(state.lastRun > 0, 'lastRun should be updated');
+      assert.equal(state.transcriptPath, transcriptPath, 'should track current transcript');
+      assert.ok(state.offset >= 8, 'offset should advance past messages');
+    });
+
+    it('respects throttle — skips if ran recently', () => {
+      const statePath = path.join(memoryDir, '.watcher-state.json');
+      fs.writeFileSync(statePath, JSON.stringify({
+        offset: 0,
+        lastRun: Date.now(), // just now
+        transcriptPath: '',
+      }));
+
+      // Should exit silently (throttled)
+      const result = execSync(
+        `node "${path.join(PLUGIN_ROOT, 'scripts', 'session-watcher.js')}"`,
+        {
+          encoding: 'utf8',
+          timeout: 5000,
+          cwd: projectDir,
+          env: { ...process.env, HOME: fakeHome },
+        }
+      );
+      // No crash, no output = throttle worked
+      assert.equal(result.trim(), '');
+    });
+
+    it('prompt includes documentation type', () => {
+      const watcherSource = fs.readFileSync(
+        path.join(PLUGIN_ROOT, 'scripts', 'session-watcher.js'), 'utf8'
+      );
+      assert.ok(
+        watcherSource.includes('documentation'),
+        'ANALYSIS_PROMPT should include documentation type'
+      );
+    });
+
+    it('documentation findings use DOC: prefix', () => {
+      const watcherSource = fs.readFileSync(
+        path.join(PLUGIN_ROOT, 'scripts', 'session-watcher.js'), 'utf8'
+      );
+      assert.ok(
+        watcherSource.includes("'DOC'") || watcherSource.includes('"DOC"'),
+        'saveFindings should use DOC: prefix for documentation type'
+      );
+    });
+  });
+
   // --- Path sanitization ---
 
   describe('PROJ_KEY sanitization matches CC', () => {

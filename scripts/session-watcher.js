@@ -99,11 +99,12 @@ Extract:
 - **corrections**: when the user corrects the assistant's approach or understanding (not just minor clarifications)
 - **decisions**: explicit choices made during discussion that affect future work (not routine confirmations)
 - **plans**: execution strategies or multi-step approaches that were agreed upon
+- **documentation**: surprising platform behaviors, non-obvious constraints, or architectural insights that a future contributor wouldn't find without digging
 
 Return JSON (no markdown, no explanation):
 {
   "findings": [
-    {"type": "correction|decision|plan", "summary": "one sentence, concise"}
+    {"type": "correction|decision|plan|documentation", "summary": "one sentence, concise"}
   ]
 }
 
@@ -216,11 +217,12 @@ function saveFindings(findings) {
   }
 
   for (const f of findings) {
-    const label = f.type.toUpperCase();
     const summary = (f.summary || '').replace(/"/g, '\\"').slice(0, 200);
+    // documentation findings use DOC: prefix so /docs-reflect can collect them
+    const label = f.type === 'documentation' ? 'DOC' : `WATCH:${f.type.toUpperCase()}`;
     try {
       execSync(
-        `node "${memJs}" --dir="${memoryDir}" note "WATCH:${label}: ${summary}"`,
+        `node "${memJs}" --dir="${memoryDir}" note "${label}: ${summary}"`,
         { timeout: 5000, stdio: 'ignore' }
       );
     } catch {}
