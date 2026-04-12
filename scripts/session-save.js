@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const { findMemoryDirOrExit } = require('./lib/find-memory-dir');
+const log = require('./lib/log');
 
 // Read stdin (hook passes JSON with session_id)
 let sessionId = 'unknown';
@@ -71,4 +72,4 @@ if (fs.existsSync(notePath)) {
   fs.writeFileSync(notePath, `---\nname: Notes ${today}\ndescription: Session notes ${today}\ntype: project\n---\n\n# ${today}\n\n${entry}`);
 }
 
-process.stderr.write(`[session-save] Handoff saved to ${handoffPath}\n`);
+log.info('handoff saved', { path: handoffPath, sessionId, branch, uncommitted });

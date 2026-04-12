@@ -17,6 +17,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const https = require('https');
 const { findMemoryDirOrExit } = require('./lib/find-memory-dir');
+const log = require('./lib/log');
 
 // --- Config ---
 const THROTTLE_MS = 3 * 60 * 1000; // run at most every 3 minutes
@@ -255,6 +256,7 @@ async function main() {
 
   // Throttle
   if (now - state.lastRun < THROTTLE_MS) {
+    log.debug('watcher throttled', { elapsed: now - state.lastRun, threshold: THROTTLE_MS });
     exitJson();
   }
 
@@ -277,6 +279,7 @@ async function main() {
 
   // Need minimum messages to analyze
   if (messages.length < MIN_NEW_MESSAGES) {
+    log.debug('watcher: not enough messages', { count: messages.length, min: MIN_NEW_MESSAGES });
     exitJson();
   }
 
@@ -287,7 +290,7 @@ async function main() {
   if (findings && findings.length) {
     saveFindings(findings);
     const summary = findings.map(f => `${f.type}: ${f.summary}`).join('; ');
-    process.stderr.write(`[watcher] ${findings.length} finding(s): ${summary}\n`);
+    log.info('watcher findings', { count: findings.length, summary });
     exitJson({ systemMessage: `[memory-toolkit watcher] ${findings.length} finding(s) saved` });
   } else {
     exitJson();

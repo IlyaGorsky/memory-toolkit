@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const { findMemoryDirOrExit } = require('./lib/find-memory-dir');
+const log = require('./lib/log');
 
 // Read stdin (hook passes JSON)
 let stdin = '';
@@ -23,6 +24,7 @@ try {
 
 const cwd = process.cwd();
 const memoryDir = findMemoryDirOrExit();
+log.debug('session-log start', { sessionId, transcriptPath, cwd, memoryDir });
 
 // Get git info
 let branch = '';
@@ -69,6 +71,7 @@ if (fs.existsSync(memoryMdPath)) {
   );
   if (updated !== memContent) {
     fs.writeFileSync(memoryMdPath, updated);
+    log.info('AP-20: updated MEMORY.md API path', { memoryMdPath });
   }
 }
 
@@ -106,4 +109,5 @@ output.hookSpecificOutput = {
   additionalContext: context,
 };
 
+log.debug('session-log output', { systemMessage: output.systemMessage });
 process.stdout.write(JSON.stringify(output) + '\n');
