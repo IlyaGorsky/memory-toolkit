@@ -593,6 +593,83 @@ describe('e2e: isolated sandbox', () => {
     });
   });
 
+  // --- UX: mandatory confirmations and menus ---
+
+  describe('skills have mandatory UX gates', () => {
+    const skillsDir = path.join(PLUGIN_ROOT, 'skills');
+
+    function readSkill(name) {
+      return fs.readFileSync(path.join(skillsDir, name, 'SKILL.md'), 'utf8');
+    }
+
+    it('session-start has mandatory Create new workstream', () => {
+      const content = readSkill('session-start');
+      assert.ok(
+        content.includes('MANDATORY') || content.includes('Never omit'),
+        'session-start must enforce + Create new workstream'
+      );
+    });
+
+    it('park requires confirmation before writing', () => {
+      const content = readSkill('park');
+      assert.ok(
+        content.includes('MUST') && content.includes('confirm'),
+        'park must require confirmation before writing'
+      );
+      assert.ok(
+        content.includes('Do NOT write until'),
+        'park must explicitly block writes before confirm'
+      );
+    });
+
+    it('session-continue requires explicit confirmation', () => {
+      const content = readSkill('session-continue');
+      assert.ok(
+        content.includes('MUST wait') && content.includes('confirmation'),
+        'session-continue must wait for explicit confirmation'
+      );
+    });
+
+    it('session-insights has numbered menu for save options', () => {
+      const content = readSkill('session-insights');
+      assert.ok(
+        content.includes('MUST present all options') && content.includes('numbered menu'),
+        'session-insights must use numbered menu'
+      );
+      assert.ok(
+        content.includes('before writing anything'),
+        'session-insights must wait before writing'
+      );
+    });
+
+    it('session-end Phase 1 requires confirmation before handoff write', () => {
+      const content = readSkill('session-end');
+      assert.ok(
+        content.includes('MUST show') && content.includes('wait for confirmation'),
+        'session-end Phase 1 must confirm before writing handoff'
+      );
+    });
+
+    it('memory-setup fresh path requires confirmation', () => {
+      const content = readSkill('memory-setup');
+      assert.ok(
+        content.includes('Wait for confirmation') && content.includes('Proceed?'),
+        'memory-setup fresh setup must confirm before creating files'
+      );
+    });
+
+    it('all writing skills have at least one confirmation gate', () => {
+      // Skills that write files must have confirmation language
+      const writingSkills = ['park', 'reflect', 'docs-reflect', 'session-end', 'memory-setup'];
+      for (const name of writingSkills) {
+        const content = readSkill(name);
+        const hasGate = content.includes('MUST') || content.includes('confirmation') ||
+                        content.includes('confirm') || content.includes('Do NOT write');
+        assert.ok(hasGate, `${name} should have a confirmation gate before writing`);
+      }
+    });
+  });
+
   // --- Version consistency ---
 
   describe('version consistency', () => {
