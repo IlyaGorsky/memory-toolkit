@@ -26,21 +26,23 @@ MEM_DIR="$HOME/.claude/projects/-${PROJ_KEY}/memory"
 node "$MEM" --dir="$MEM_DIR" workstreams
 ```
 
-Show menu:
+Show menu. **REQUIRED format** — list workstreams from the command output, then ALWAYS add the ➕ line as the last numbered item:
 
 ```
 Workstreams:
-  1. pr-review — 3 files, handoff from 2026-04-07
-  2. core — 12 files
-  3. ➕ Create new workstream
+  1. <name> — <N> files, handoff from <date>
+  ...
+  N. ➕ Create new workstream
 
 What do we do?
 ```
 
+**The ➕ Create new workstream line is MANDATORY. Never omit it.**
+
 Response options:
 - Number or workstream name → load details and go to Step 3
 - "All" / "overview" → show a brief snapshot for each, then focus candidates
-- "New" / ➕ number → Step 1b: create workstream
+- Last number / "New" / ➕ → Step 1b: create workstream
 
 ---
 
