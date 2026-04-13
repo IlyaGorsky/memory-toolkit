@@ -151,15 +151,41 @@ Format: after each candidate — `→ recommendation: Sonnet (execution by patte
 
 ---
 
-## Step 7: Session label
+## Step 7: Task card
 
-After choosing a focus — write a label:
+After the user picks a focus — build a structured task card from available context (plan.md, handoff, memory). Do NOT ask the user to fill in fields manually — gather everything yourself, then confirm.
 
-```bash
-node "$MEM" --dir="$MEM_DIR" note "SESSION_START branch:$(git branch --show-current) workstream:<chosen> focus:<task>"
+### Required field
+
+- **What**: one sentence — what we're doing and why
+
+### Auto-filled from context
+
+- **Workstream**: chosen workstream name
+- **Files**: key files to read/modify (from plan.md, handoff, or grep)
+- **AP-ID**: if exists in plan.md
+- **Depends on**: blockers, if any
+
+### Format
+
+```text
+### Task
+What: <sentence>
+Workstream: <name>
+Files: <path1>, <path2>
+AP: <AP-ID or —>
+Depends: <blockers or —>
 ```
 
-This allows `/session-restore search SESSION_START` to find all session entry points.
+Show the card, ask: "Start? Or adjust?"
+
+After confirmation — save as session label:
+
+```bash
+node "$MEM" --dir="$MEM_DIR" note "SESSION_START branch:$(git branch --show-current) workstream:<chosen> focus:<what>"
+```
+
+Then load full context for the listed files and begin work.
 
 ---
 

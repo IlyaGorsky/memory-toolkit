@@ -610,6 +610,34 @@ describe('e2e: isolated sandbox', () => {
       );
     });
 
+    it('session-start Step 7 builds a task card before work begins', () => {
+      const content = readSkill('session-start');
+      assert.ok(
+        content.includes('Task card'),
+        'session-start should have a Task card step'
+      );
+      assert.ok(
+        content.includes('What:') && content.includes('Workstream:'),
+        'task card should have What and Workstream fields'
+      );
+      assert.ok(
+        content.includes('Do NOT ask the user to fill in fields manually'),
+        'task card must auto-fill, not ask user to fill a form'
+      );
+      assert.ok(
+        content.includes('Start? Or adjust?'),
+        'task card must confirm before starting work'
+      );
+    });
+
+    it('session-start uses letters for focus candidates (not numbers)', () => {
+      const content = readSkill('session-start');
+      assert.ok(
+        content.includes('a. <task>') && content.includes('b. <task>'),
+        'focus candidates should use letters (a/b/c) to avoid clash with workstream numbers'
+      );
+    });
+
     it('park requires confirmation before writing', () => {
       const content = readSkill('park');
       assert.ok(
