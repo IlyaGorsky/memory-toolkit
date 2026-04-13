@@ -133,15 +133,14 @@ Read current MEMORY.md. Ensure the structure follows this order:
 
 This order matters: Claude Code truncates MEMORY.md after 200 lines. By keeping API and Rules at the top, they survive truncation even if auto-memory adds many index entries.
 
-**API block** (add if missing, right after heading — use the absolute `$MEM` path resolved in 4a):
+**API block** (add if missing, right after heading — one compact line, use the absolute `$MEM` path resolved in 4a):
 ```markdown
 ## API
-```bash
-node {absolute path to memory.js} --dir={MEM_DIR} <command>
-```
+`node {absolute path to memory.js} --dir={MEM_DIR} <command>`
 ```
 
-**Rules block** (add if missing, after API and before index entries):
+**Rules block** (add if missing, after API and before index entries).
+
 ```markdown
 ## Rules
 
@@ -184,7 +183,18 @@ node "$MEM_DIR/memory.js" --dir="$MEM_DIR" list
 
 Ask: "Based on these files, I see topics like {X, Y, Z}. Want me to create workstreams for them?"
 
-### 4d: Create subdirectories and move files
+### 4d: Add workstreams to MEMORY.md index
+
+After creating workstreams.json, add a Workstreams section to MEMORY.md so they are visible in the index:
+
+```markdown
+## Workstreams
+- **{name}** — keywords: {keywords}
+```
+
+This ensures agents see workstreams without running `memory.js workstreams`.
+
+### 4e: Create subdirectories and move files
 
 Only if user agrees. For each `.md` file with frontmatter `type`:
 
@@ -199,6 +209,7 @@ After moving files — update paths in MEMORY.md index.
 
 ### 4f: Create memory-schema.json
 
+
 If `memory-schema.json` is missing in `$MEM_DIR`:
 
 ```bash
@@ -211,6 +222,7 @@ fi
 This file controls section protection and eviction weights for `memory.js reindex`. Never overwrite if it already exists — user may have customized it.
 
 ### 4g: Verify
+
 
 ```bash
 node "$MEM_DIR/memory.js" --dir="$MEM_DIR" list
