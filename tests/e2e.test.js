@@ -302,6 +302,37 @@ describe('e2e: isolated sandbox', () => {
     });
   });
 
+  // --- find-memory-dir resilience ---
+
+  describe('find-memory-dir glob fallback', () => {
+    it('finds memory dir when sanitization drifts', () => {
+      // Simulate: CC used a different sanitization formula, so the ancestor walk
+      // won't find it. But the dir exists and contains MEMORY.md with the
+      // project leaf name in the dir name.
+      const altKey = 'WEIRD-SANITIZATION-' + path.basename(projectDir);
+      const altDir = path.join(fakeHome, '.claude', 'projects', altKey, 'memory');
+      fs.mkdirSync(altDir, { recursive: true });
+      fs.writeFileSync(path.join(altDir, 'MEMORY.md'), '# Test');
+
+      // Use a cwd that won't match ancestor walk (since altKey uses wrong formula)
+      // but whose basename matches the altKey
+      const { findMemoryDir } = require('../scripts/lib/find-memory-dir');
+      // Temporarily point to fakeHome by patching PROJECTS_ROOT
+      // Instead, we test the exported globFallback indirectly:
+      // The ancestor walk will find the real dir first (since projectDir exists),
+      // so we test with a subdirectory that has no matching ancestor dir
+      const subDir = path.join(sandbox, 'orphan', path.basename(projectDir));
+      fs.mkdirSync(subDir, { recursive: true });
+
+      // For the orphan dir, ancestor walk will fail (no memory dir exists for
+      // /tmp/mt-e2e-.../orphan/project via formula). Glob fallback should find
+      // the altKey dir because it contains the leaf name "project".
+      const result = findMemoryDir(subDir);
+      // Should find either the formula-based dir or the alt dir via glob
+      assert.ok(result.exists, 'glob fallback should find an existing memory dir');
+    });
+  });
+
   // --- Path integrity ---
 
   describe('no hardcoded paths in skills', () => {

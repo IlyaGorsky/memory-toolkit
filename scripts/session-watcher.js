@@ -25,6 +25,12 @@ const MIN_NEW_MESSAGES = 6;          // need at least 6 new messages to analyze
 const MODEL = 'claude-haiku-4-5-20251001';
 const MAX_TOKENS = 1024;
 
+// --- Read stdin (PostToolUse hook passes JSON with session_id, transcript_path) ---
+let stdinPayload = {};
+try {
+  stdinPayload = JSON.parse(fs.readFileSync(0, 'utf8'));
+} catch {}
+
 // --- Find memory dir ---
 const memoryDir = findMemoryDirOrExit();
 
@@ -41,7 +47,10 @@ function saveState(state) {
 }
 
 // --- Find transcript path ---
+// Primary: from PostToolUse stdin payload (public hook contract).
+// Fallback: from sessions.jsonl (for backwards compat / manual runs).
 function findTranscript() {
+  if (stdinPayload.transcript_path) return stdinPayload.transcript_path;
   const sessionsPath = path.join(memoryDir, 'sessions.jsonl');
   if (!fs.existsSync(sessionsPath)) return null;
   const lines = fs.readFileSync(sessionsPath, 'utf8').trim().split('\n').filter(Boolean);
