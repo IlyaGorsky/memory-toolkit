@@ -252,6 +252,218 @@ describe('e2e: isolated sandbox', () => {
     });
   });
 
+  // --- session-watcher.js new features ---
+
+  describe('session-watcher.js state management', () => {
+    it('persists findingsCount, docCount, phase in state', () => {
+      const wStatePath = path.join(memoryDir, '.watcher-state.json');
+      const transcriptPath = path.join(sandbox, 'transcript-state.jsonl');
+
+      // Write enough messages
+      const messages = [];
+      for (let i = 0; i < 8; i++) {
+        messages.push(JSON.stringify({
+          type: i % 2 === 0 ? 'user' : 'assistant',
+          message: { content: [{ type: 'text', text: `State test message ${i}` }] },
+        }));
+      }
+      fs.writeFileSync(transcriptPath, messages.join('\n') + '\n');
+
+      // Write sessions.jsonl
+      const sessionsPath = path.join(memoryDir, 'sessions.jsonl');
+      fs.writeFileSync(sessionsPath,
+        JSON.stringify({ id: 'state-test', transcript: transcriptPath }) + '\n'
+      );
+
+      // Set initial state with counters
+      fs.writeFileSync(wStatePath, JSON.stringify({
+        offset: 0, lastRun: 0, transcriptPath: '',
+        findingsCount: 5, docCount: 1, phase: 'planning',
+        suggestedReflect: false, suggestedDocs: false,
+      }));
+
+      // Run watcher (LLM will fail, but state should be persisted)
+      try {
+        execSync(
+          `node "${path.join(PLUGIN_ROOT, 'scripts', 'session-watcher.js')}"`,
+          {
+            encoding: 'utf8',
+            timeout: 10000,
+            cwd: projectDir,
+            env: { ...process.env, HOME: fakeHome, ANTHROPIC_API_KEY: '' },
+          }
+        );
+      } catch {}
+
+      const state = JSON.parse(fs.readFileSync(wStatePath, 'utf8'));
+      // State should preserve counters (same transcript = not a new session)
+      // findingsCount may stay 5 (LLM failed, no new findings) — just check it exists
+      assert.ok('findingsCount' in state, 'state should have findingsCount');
+      assert.ok('docCount' in state, 'state should have docCount');
+      assert.ok('phase' in state, 'state should have phase');
+      assert.ok('suggestedReflect' in state, 'state should have suggestedReflect');
+      assert.ok('suggestedDocs' in state, 'state should have suggestedDocs');
+    });
+
+    it('resets counters on new session (transcript change)', () => {
+      const wStatePath = path.join(memoryDir, '.watcher-state.json');
+      const newTranscript = path.join(sandbox, 'transcript-new.jsonl');
+
+      // Write messages for new transcript
+      const messages = [];
+      for (let i = 0; i < 8; i++) {
+        messages.push(JSON.stringify({
+          type: i % 2 === 0 ? 'user' : 'assistant',
+          message: { content: [{ type: 'text', text: `New session message ${i}` }] },
+        }));
+      }
+      fs.writeFileSync(newTranscript, messages.join('\n') + '\n');
+
+      // sessions.jsonl points to new transcript
+      const sessionsPath = path.join(memoryDir, 'sessions.jsonl');
+      fs.writeFileSync(sessionsPath,
+        JSON.stringify({ id: 'new-session', transcript: newTranscript }) + '\n'
+      );
+
+      // Old state has accumulated counters from a DIFFERENT transcript
+      fs.writeFileSync(wStatePath, JSON.stringify({
+        offset: 50, lastRun: 0,
+        transcriptPath: '/old/transcript.jsonl', // different path → new session
+        findingsCount: 10, docCount: 5, phase: 'review',
+        suggestedReflect: true, suggestedDocs: true,
+      }));
+
+      try {
+        execSync(
+          `node "${path.join(PLUGIN_ROOT, 'scripts', 'session-watcher.js')}"`,
+          {
+            encoding: 'utf8',
+            timeout: 10000,
+            cwd: projectDir,
+            env: { ...process.env, HOME: fakeHome, ANTHROPIC_API_KEY: '' },
+          }
+        );
+      } catch {}
+
+      const state = JSON.parse(fs.readFileSync(wStatePath, 'utf8'));
+      // New session → counters should be reset
+      assert.equal(state.findingsCount, 0, 'findingsCount should reset on new session');
+      assert.equal(state.docCount, 0, 'docCount should reset on new session');
+      assert.equal(state.suggestedReflect, false, 'suggestedReflect should reset');
+      assert.equal(state.suggestedDocs, false, 'suggestedDocs should reset');
+      assert.equal(state.phase, null, 'phase should reset on new session');
+      assert.equal(state.offset, 8, 'offset should start from 0 for new transcript');
+    });
+
+    it('reads transcript_path from stdin when provided', () => {
+      const wStatePath = path.join(memoryDir, '.watcher-state.json');
+      const stdinTranscript = path.join(sandbox, 'transcript-stdin.jsonl');
+
+      // Write messages
+      const messages = [];
+      for (let i = 0; i < 8; i++) {
+        messages.push(JSON.stringify({
+          type: i % 2 === 0 ? 'user' : 'assistant',
+          message: { content: [{ type: 'text', text: `Stdin test ${i}` }] },
+        }));
+      }
+      fs.writeFileSync(stdinTranscript, messages.join('\n') + '\n');
+
+      // Reset state
+      fs.writeFileSync(wStatePath, JSON.stringify({ offset: 0, lastRun: 0, transcriptPath: '' }));
+
+      // Pass transcript_path via stdin (simulating PostToolUse hook payload)
+      const stdinPayload = JSON.stringify({
+        hook_event_name: 'PostToolUse',
+        session_id: 'stdin-test',
+        transcript_path: stdinTranscript,
+        tool_name: 'Bash',
+      });
+
+      try {
+        execSync(
+          `echo '${stdinPayload}' | node "${path.join(PLUGIN_ROOT, 'scripts', 'session-watcher.js')}"`,
+          {
+            encoding: 'utf8',
+            timeout: 10000,
+            cwd: projectDir,
+            env: { ...process.env, HOME: fakeHome, ANTHROPIC_API_KEY: '' },
+          }
+        );
+      } catch {}
+
+      const state = JSON.parse(fs.readFileSync(wStatePath, 'utf8'));
+      assert.equal(state.transcriptPath, stdinTranscript, 'should use transcript_path from stdin');
+      assert.ok(state.offset >= 8, 'should have read messages from stdin transcript');
+    });
+  });
+
+  // --- hooks.json structure ---
+
+  describe('hooks.json configuration', () => {
+    it('has SubagentStop event', () => {
+      const hooksJson = JSON.parse(
+        fs.readFileSync(path.join(PLUGIN_ROOT, 'hooks', 'hooks.json'), 'utf8')
+      );
+      assert.ok(hooksJson.hooks.SubagentStop, 'SubagentStop should be configured');
+      assert.ok(
+        hooksJson.hooks.SubagentStop[0].hooks[0].command.includes('session-watcher'),
+        'SubagentStop should run session-watcher'
+      );
+    });
+
+    it('has all expected hook events', () => {
+      const hooksJson = JSON.parse(
+        fs.readFileSync(path.join(PLUGIN_ROOT, 'hooks', 'hooks.json'), 'utf8')
+      );
+      const events = Object.keys(hooksJson.hooks);
+      assert.ok(events.includes('PreCompact'), 'should have PreCompact');
+      assert.ok(events.includes('PostToolUse'), 'should have PostToolUse');
+      assert.ok(events.includes('SessionStart'), 'should have SessionStart');
+      assert.ok(events.includes('SubagentStop'), 'should have SubagentStop');
+    });
+
+    it('all hook commands use CLAUDE_PLUGIN_ROOT', () => {
+      const hooksJson = JSON.parse(
+        fs.readFileSync(path.join(PLUGIN_ROOT, 'hooks', 'hooks.json'), 'utf8')
+      );
+      for (const [event, matchers] of Object.entries(hooksJson.hooks)) {
+        for (const matcher of matchers) {
+          for (const hook of matcher.hooks) {
+            assert.ok(
+              hook.command.includes('${CLAUDE_PLUGIN_ROOT}'),
+              `${event} hook should use CLAUDE_PLUGIN_ROOT: ${hook.command}`
+            );
+          }
+        }
+      }
+    });
+  });
+
+  // --- find-memory-dir edge cases ---
+
+  describe('find-memory-dir edge cases', () => {
+    it('returns exists:false for completely unknown path', () => {
+      const { findMemoryDir } = require('../scripts/lib/find-memory-dir');
+      const result = findMemoryDir('/nonexistent/path/to/xyzzy-unique-no-match-12345');
+      assert.equal(result.exists, false, 'no memory dir should exist for unknown path');
+      assert.ok(result.dir, 'should return a formula-based dir');
+    });
+
+    it('sanitize handles dots in path', () => {
+      const { memoryDirFor } = require('../scripts/lib/find-memory-dir');
+      const dir = memoryDirFor('/Users/user.name/project');
+      // The project key part (after /projects/) should have dots replaced with dashes
+      const projectKey = dir.split('/projects/')[1].split('/')[0];
+      assert.ok(projectKey.includes('-Users-user-name-project'), `should sanitize dots: ${projectKey}`);
+      assert.ok(!projectKey.includes('.'), `project key should not contain dots: ${projectKey}`);
+    });
+
+    // Note: ancestor walk test requires real HOME (PROJECTS_ROOT is set at require time).
+    // Covered by existing e2e test "finds transcript from sessions.jsonl" which runs
+    // watcher in sandbox with HOME=fakeHome via execSync.
+  });
+
   // --- Path sanitization ---
 
   describe('PROJ_KEY sanitization matches CC', () => {

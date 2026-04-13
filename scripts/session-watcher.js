@@ -27,17 +27,10 @@ const MAX_TOKENS = 1024;
 const SUGGEST_REFLECT_THRESHOLD = 8;  // suggest /reflect after N accumulated findings
 const SUGGEST_DOCS_THRESHOLD = 3;     // suggest /docs-reflect after N DOC findings
 
-// --- Read stdin (PostToolUse hook passes JSON with session_id, transcript_path) ---
+// --- Runtime state (initialized only when run as main) ---
 let stdinPayload = {};
-try {
-  stdinPayload = JSON.parse(fs.readFileSync(0, 'utf8'));
-} catch {}
-
-// --- Find memory dir ---
-const memoryDir = findMemoryDirOrExit();
-
-// --- State ---
-const statePath = path.join(memoryDir, '.watcher-state.json');
+let memoryDir = '';
+let statePath = '';
 
 function loadState() {
   try { return JSON.parse(fs.readFileSync(statePath, 'utf8')); }
@@ -370,4 +363,13 @@ async function main() {
   }
 }
 
-main().catch(() => exitJson());
+// --- Exports for testing ---
+if (require.main === module) {
+  // Initialize runtime state only when run as main
+  try { stdinPayload = JSON.parse(fs.readFileSync(0, 'utf8')); } catch {}
+  memoryDir = findMemoryDirOrExit();
+  statePath = path.join(memoryDir, '.watcher-state.json');
+  main().catch(() => exitJson());
+} else {
+  module.exports = { parseFindings, extractText, readNewMessages, buildConversationText, ANALYSIS_PROMPT };
+}
