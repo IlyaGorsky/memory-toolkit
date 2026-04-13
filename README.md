@@ -54,6 +54,50 @@ memory-toolkit saves the session.
 
 ### Session lifecycle
 
+```text
+ /session-start                                         /session-end
+ ├ load handoff                                         ├ save handoff
+ ├ health check           YOU WORK HERE                 ├ /reflect
+ ├ show focus                                           └ /docs-reflect
+ └ suggest model                                              │
+       │                                                      │
+       ▼                                                      ▲
+ ┌─────────────────────────────────────────────────────────────┘
+ │
+ │  SessionStart hook
+ │    session-log.js: log session, inject handoff, health check
+ │
+ │  PostToolUse hook (every tool call)
+ │    session-watcher.js — every 3 min, 6+ new messages:
+ │    transcript → Haiku → corrections, decisions, plans, docs
+ │    phase detection (planning → implementation → review → debug)
+ │    nudge /reflect after 8 findings, /docs-reflect after 3 DOC
+ │
+ │  PostToolUse hook (git commit)
+ │    COMMIT: <message> → notes/<today>.md
+ │
+ │  SubagentStop hook
+ │    session-watcher.js — same, for subagent turns
+ │
+ │  PreCompact hook
+ │    session-save.js: auto-save branch, commit, uncommitted
+ │
+ │  /park — save idea    /memory — search, list, query
+ │
+ └──────────────────────────────┐
+                                ▼
+ ~/.claude/projects/<project>/memory/
+ ├ MEMORY.md              ← index (loaded every session)
+ ├ workstreams/handoff.md  ← session continuity
+ ├ notes/<today>.md        ← daily notes (auto + manual)
+ ├ feedback/ decisions/ reference/
+ ├ sessions.jsonl          ← session ID index
+ └ .watcher-state.json    ← phase, counters
+```
+
+<details>
+<summary>Visual diagram (Mermaid — renders on GitHub)</summary>
+
 ```mermaid
 flowchart TB
     subgraph START ["/session-start"]
@@ -102,6 +146,8 @@ flowchart TB
     END_ --> STORAGE
     STORAGE --> START
 ```
+
+</details>
 
 ### Use case 1: Context survives compaction
 
