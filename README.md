@@ -55,11 +55,58 @@ memory-toolkit saves the session.
 ### Session lifecycle
 
 ```text
-/session-start ──→  work  ──→ /session-end
-      ▲                            │
-      │                            ▼
-      │                     handoff → reflect → docs-reflect
-      └────── workstreams/handoff.md ──────────────────────┘
+                          ┌─────────────────────────────────────────────────┐
+                          │              SESSION LIFECYCLE                   │
+                          └─────────────────────────────────────────────────┘
+
+ ┌──────────────────┐                                    ┌──────────────────┐
+ │  /session-start  │                                    │   /session-end   │
+ │                  │                                    │                  │
+ │ • load handoff   │                                    │ • save handoff   │
+ │ • health check   │         YOU WORK HERE              │ • /reflect       │
+ │ • show focus     │                                    │ • /docs-reflect  │
+ │ • suggest model  │                                    │                  │
+ └────────┬─────────┘                                    └────────▲─────────┘
+          │                                                       │
+          ▼                                                       │
+ ┌────────────────────────────────────────────────────────────────┴────────┐
+ │                                                                         │
+ │   ┌─ SessionStart hook ──────────────────────────────────────────────┐  │
+ │   │  session-log.js: log session, inject handoff, run health check  │  │
+ │   └─────────────────────────────────────────────────────────────────┘  │
+ │                                                                         │
+ │   ┌─ PostToolUse hook (every tool call) ─────────────────────────────┐  │
+ │   │  session-watcher.js (every 3 min, min 6 new messages):          │  │
+ │   │  • transcript → Haiku → corrections, decisions, plans, docs     │  │
+ │   │  • phase detection (planning → implementation → review → debug) │  │
+ │   │  • nudge /reflect after 8 findings, /docs-reflect after 3 DOC   │  │
+ │   └─────────────────────────────────────────────────────────────────┘  │
+ │                                                                         │
+ │   ┌─ PostToolUse hook (git commit) ──────────────────────────────────┐  │
+ │   │  COMMIT: <message> → notes/<today>.md                           │  │
+ │   └─────────────────────────────────────────────────────────────────┘  │
+ │                                                                         │
+ │   ┌─ SubagentStop hook ──────────────────────────────────────────────┐  │
+ │   │  session-watcher.js (same as above, for subagent turns)         │  │
+ │   └─────────────────────────────────────────────────────────────────┘  │
+ │                                                                         │
+ │   ┌─ PreCompact hook ────────────────────────────────────────────────┐  │
+ │   │  session-save.js: auto-save branch, commit, uncommitted count   │  │
+ │   └─────────────────────────────────────────────────────────────────┘  │
+ │                                                                         │
+ │   /park ── save idea without losing thought                             │
+ │   /memory ── search, list, query on demand                              │
+ │                                                                         │
+ └─────────────────────────────────────────────────────────────────────────┘
+          │                                                       │
+          ▼                                                       ▼
+ ┌─────────────────────────────────────────────────────────────────────────┐
+ │                     ~/.claude/projects/<project>/memory/                 │
+ │                                                                         │
+ │   MEMORY.md ← index       workstreams/handoff.md ← session continuity  │
+ │   notes/<today>.md         feedback/ decisions/ reference/              │
+ │   sessions.jsonl           .watcher-state.json (phase, counters)        │
+ └─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Use case 1: Context survives compaction
@@ -226,10 +273,11 @@ All skills available with namespace prefix: `/memory-toolkit:session-start`, etc
 
 | Event | Action |
 |-------|--------|
-| **PreCompact** | Auto-save session state (branch, commit, uncommitted files) before compaction |
+| **SessionStart** | Log session, inject handoff context, run memory health check, display DOC: reminder |
 | **PostToolUse** (git commit) | Log commits to daily notes |
-| **PostToolUse** (all tools) | Run background watcher — extract decisions/corrections via Haiku |
-| **SessionStart** | Log session ID, show handoff, display DOC: reminder |
+| **PostToolUse** (all tools) | Background watcher — extract decisions/corrections/docs via Haiku, detect phase, suggest /reflect |
+| **SubagentStop** | Same watcher for subagent turns |
+| **PreCompact** | Auto-save session state (branch, commit, uncommitted files) before compaction |
 
 ## How it compares
 
