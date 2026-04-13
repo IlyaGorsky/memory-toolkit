@@ -123,9 +123,9 @@ Git: <branch> / clean tree / N uncommitted files
 Last commit: <hash> <message> (<days> days ago)
 
 ### Focus candidates
-1. <task> — <SP> — why now
-2. <task> — <SP> — why now
-3. <task> — <SP> — why now
+a. <task> — <SP> — why now
+b. <task> — <SP> — why now
+c. <task> — <SP> — why now
 ```
 
 ---
