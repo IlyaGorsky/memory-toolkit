@@ -37,6 +37,15 @@ A skill describes *how the agent should behave*, not code that gets executed. Th
 
 > Personal, structured, flat, automatically maintained through hooks, vendor-independent, and evolving with the developer.
 
+**Memory is the last source of truth, not the first.**
+CLAUDE.md → `.claude/rules/` → skills → memory. Memory holds what hasn't been promoted yet. If a rule lives in memory for months — it should have been in `rules/` or CLAUDE.md long ago.
+
+**Healthy memory shrinks.**
+Memory should decrease as a project matures. Decisions get promoted to ADRs, feedback becomes rules, handoffs get shorter as conventions stabilize. The metric is not "how much was written" but "how much was promoted to documentation and removed from memory."
+
+**Hooks deliver data, skills deliver dialog.**
+A hook silently injects context — handoff, health status, reminders. A skill stops and asks — which workstream, which focus, confirm before writing. Moving a decision into a hook means hiding it from the user. Explicit is better than implicit.
+
 ---
 
 ## Intersections with Karpathy's ["LLM Knowledge Bases"](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)
