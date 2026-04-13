@@ -41,6 +41,20 @@ Report findings to the user before making any changes.
 
 If `--fresh` argument or no `$MEM_DIR`:
 
+**Before creating anything, show the user what will be set up:**
+
+```
+Fresh memory setup for this project:
+  Dir: {MEM_DIR}
+  Will create: MEMORY.md, workstreams.json, memory-schema.json
+  Subdirs: feedback/, decisions/, profile/, reference/, notes/, workstreams/
+  Will ask: workstreams, role, language, key links
+
+Proceed? (yes/skip)
+```
+
+**Wait for confirmation before creating any files.**
+
 1. `mkdir -p "$MEM_DIR"`
 2. If no `CLAUDE_PLUGIN_ROOT`: `cp /path/to/memory-toolkit/scripts/memory.js "$MEM_DIR/"`
 3. Ask: "What are the main workstreams in this project?" → create `workstreams.json`

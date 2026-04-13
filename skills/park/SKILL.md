@@ -53,13 +53,27 @@ type: project
 node $MEM/memory.js note "{essence of the idea}"
 ```
 
-## Step 3: Update MEMORY.md
+## Step 3: Propose & confirm
 
-If a new file was created — add a line to the MEMORY.md index.
+**MUST show the user what will be saved and where BEFORE writing anything:**
 
-## Step 4: Confirm
+```
+Park this?
+  What: {essence}
+  File: {path}
+  Workstream: {name}
 
-Show the user:
+Save? (yes/skip)
+```
+
+**Wait for explicit confirmation. Do NOT write until the user confirms.**
+
+## Step 4: Write
+
+After confirmation:
+- Write the file (Step 2 format)
+- If a new file was created — add a line to the MEMORY.md index
+- Show receipt:
 
 ```
 Parked: {name}

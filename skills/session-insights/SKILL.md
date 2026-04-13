@@ -90,12 +90,19 @@ Format:
 
 ## Step 4: Save
 
-Ask the user:
+**MUST present all options as a numbered menu and wait for user response before writing anything:**
 
-- "Save insights to memory?" → create files in `feedback/` or `decisions/`
-- "Add friction points to backlog?" → append to `backlog.md`
-- "Mark as DOC:?" → `node "$MEM" --dir="$MEM_DIR" note "DOC: <domain> — <insight>"` for /docs-reflect
-- "Skip" → display only
+```
+What to do with these insights?
+  1. Save insights to memory (feedback/ or decisions/)
+  2. Add friction points to backlog
+  3. Mark as DOC: for /docs-reflect
+  4. Skip — display only
+
+Choose (1-4, or comma-separated):
+```
+
+Then execute only what the user chose.
 
 ## Rules
 

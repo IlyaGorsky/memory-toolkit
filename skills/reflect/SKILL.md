@@ -71,7 +71,7 @@ Update the backlog target:
 - **File-based** (backlog.md, TODO.md, etc.): add items to appropriate section, mark closed with `[x]`
 - **GitHub Issues**: `gh issue create --title "<item>" --body "<why>"` for each new item; `gh issue close <number>` for closed
 
-Also save insights to memory:
+Also save insights to memory (included in the same confirmation — no separate prompt needed):
 ```bash
 node "$MEM" note "REFLECT: <key insight from session>"
 ```

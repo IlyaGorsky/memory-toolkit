@@ -57,6 +57,8 @@ Don't show task plan, focus candidates, model recommendations — that's for `/s
 
 ## Step 4: Load context on demand
 
+**MUST wait for explicit user confirmation ("yes", "go", a number, or similar) before proceeding.** Do NOT auto-continue after showing the summary.
+
 If the user confirmed — load only what's needed for the next step:
 
 - The file that was last edited

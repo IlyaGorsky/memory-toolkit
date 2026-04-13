@@ -18,9 +18,11 @@ Check what is current:
 - Rules — new agreements?
 - Reference — new links?
 
-### 1b: Write handoff
+### 1b: Propose handoff
 
-Create/update `workstreams/handoff.md`:
+**MUST show the proposed handoff content to the user and wait for confirmation before writing.**
+
+Prepare `workstreams/handoff.md` content:
 
 ```markdown
 ---
@@ -47,6 +49,10 @@ type: project
 ### Session decisions
 - <new agreements, if any>
 ```
+
+### 1c: Confirm
+
+Show the handoff to user. **Wait for "ok" / "save" before writing.** Then write `workstreams/handoff.md`.
 
 ## Phase 2: Reflect
 
