@@ -1,0 +1,56 @@
+name: session-start
+description: Cold session start pipeline — context, git, candidates, task card, work
+
+phases:
+  - id: context
+    description: Load memory context and show workstream menu
+    steps:
+      - description: Read MEMORY.md
+      - description: Run memory.js workstreams
+      - description: Show numbered workstream list with + Create new
+      - description: Wait for user to pick a workstream
+    output: chosen workstream name
+
+  - id: git
+    description: Check git state
+    steps:
+      - description: git status, git log --oneline -5, git branch
+      - description: Report uncommitted changes if any
+    output: branch, tree state, last commit
+
+  - id: workstream-detail
+    depends: [context]
+    description: Load chosen workstream detail (brief)
+    steps:
+      - description: Run memory.js workstream <name> --brief
+      - description: Show task count, blocked items, available items
+    output: available tasks list
+
+  - id: candidates
+    depends: [workstream-detail, git]
+    description: Propose focus candidates
+    steps:
+      - description: Pick up to 3 unblocked tasks from workstream detail
+      - description: Add model recommendation per candidate
+      - description: "Use letters: a. b. c. (not numbers — numbers are for workstreams)"
+      - description: Ask user to pick
+    output: chosen task
+    verify: user selected a candidate (a/b/c) or stated a custom task
+
+  - id: task-card
+    depends: [candidates]
+    description: Build structured task card from context
+    steps:
+      - description: "Auto-fill from handoff, memory, and project backlog if one exists — do NOT ask user to fill fields"
+      - description: "Required: What (one sentence)"
+      - description: "Auto-filled: Workstream, Files, AP-ID, Depends"
+      - description: "Show card, ask: Start? Or adjust?"
+    output: confirmed task card
+    verify: SESSION_START note saved with What field
+
+  - id: work
+    depends: [task-card]
+    description: Load full context and begin work
+    steps:
+      - description: Load full file contents for files listed in task card
+      - description: Begin implementation

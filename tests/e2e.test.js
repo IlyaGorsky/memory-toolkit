@@ -610,11 +610,11 @@ describe('e2e: isolated sandbox', () => {
       );
     });
 
-    it('session-start Step 7 builds a task card before work begins', () => {
+    it('session-start has task-card phase as pipeline gate', () => {
       const content = readSkill('session-start');
       assert.ok(
-        content.includes('Task card'),
-        'session-start should have a Task card step'
+        content.includes('task-card phase'),
+        'session-start should have a task-card phase'
       );
       assert.ok(
         content.includes('What:') && content.includes('Workstream:'),
@@ -630,12 +630,25 @@ describe('e2e: isolated sandbox', () => {
       );
     });
 
+    it('session-start pipeline YAML has verify gates', () => {
+      const yaml = fs.readFileSync(
+        path.join(PLUGIN_ROOT, 'skills', 'task-template', 'templates', 'session-start.yaml'), 'utf8'
+      );
+      assert.ok(yaml.includes('verify:'), 'pipeline should have verify gates');
+      assert.ok(
+        yaml.includes('depends: [task-card]'),
+        'work phase must depend on task-card phase'
+      );
+    });
+
     it('session-start uses letters for focus candidates (not numbers)', () => {
       const content = readSkill('session-start');
-      assert.ok(
-        content.includes('a. <task>') && content.includes('b. <task>'),
-        'focus candidates should use letters (a/b/c) to avoid clash with workstream numbers'
+      // Check SKILL.md or pipeline YAML
+      const yaml = fs.readFileSync(
+        path.join(PLUGIN_ROOT, 'skills', 'task-template', 'templates', 'session-start.yaml'), 'utf8'
       );
+      const hasLetters = content.includes('a. b. c.') || yaml.includes('a. b. c.');
+      assert.ok(hasLetters, 'focus candidates should use letters (a/b/c) to avoid clash with workstream numbers');
     });
 
     it('park requires confirmation before writing', () => {
@@ -757,6 +770,11 @@ describe('e2e: isolated sandbox', () => {
       const skillsDir = path.join(PLUGIN_ROOT, 'skills');
       const skillNames = fs.readdirSync(skillsDir, { withFileTypes: true })
         .filter(d => d.isDirectory() && fs.existsSync(path.join(skillsDir, d.name, 'SKILL.md')))
+        .filter(d => {
+          // Skip internal skills (user-invocable: false)
+          const content = fs.readFileSync(path.join(skillsDir, d.name, 'SKILL.md'), 'utf8');
+          return !content.includes('user-invocable: false');
+        })
         .map(d => d.name);
 
       for (const name of skillNames) {

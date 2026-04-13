@@ -7,82 +7,62 @@ argument-hint: "[workstream]"
 
 # /session-start — Cold session start
 
-Quick context entry. Gather state, show what's remaining, suggest focus.
+Quick context entry via pipeline. Each phase must complete before the next begins.
 
----
+## Load pipeline
 
-## Step 1: Memory — load context
+```
+Read: ${CLAUDE_PLUGIN_ROOT}/skills/task-template/templates/session-start.yaml
+```
 
-Read MEMORY.md (context map).
+Read the YAML and execute phases in dependency order. Follow the orchestrator rules:
 
-If a workstream argument is provided — load details immediately and go to Step 3.
+```
+Read: ${CLAUDE_PLUGIN_ROOT}/skills/task-template/SKILL.md
+```
 
-If no argument is provided — resolve paths and show workstreams:
+## Bootstrap (before pipeline)
+
+Resolve paths for use in all phases:
 
 ```bash
 MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
 PROJ_KEY=$(pwd | tr '/.' '-' | sed 's/^-//')
 MEM_DIR="$HOME/.claude/projects/-${PROJ_KEY}/memory"
-node "$MEM" --dir="$MEM_DIR" workstreams
 ```
 
-Show menu. **REQUIRED format** — list workstreams from the command output, then ALWAYS add the ➕ line as the last numbered item:
+## Phase-specific instructions
+
+These supplement the YAML — the pipeline defines order and gates, these provide implementation detail.
+
+### context phase
+
+Read MEMORY.md. Run `node "$MEM" --dir="$MEM_DIR" workstreams`.
+
+If a workstream argument is provided — skip the menu, load details immediately.
+
+Show menu. **REQUIRED format** — list workstreams from the command output, then ALWAYS add the + line as the last numbered item:
 
 ```
 Workstreams:
   1. <name> — <N> files, handoff from <date>
   ...
-  N. ➕ Create new workstream
+  N. + Create new workstream
 
 What do we do?
 ```
 
-**The ➕ Create new workstream line is MANDATORY. Never omit it.**
+**The + Create new workstream line is MANDATORY. Never omit it.**
 
 Response options:
-- Number or workstream name → load details and go to Step 3
-- "All" / "overview" → show a brief snapshot for each, then focus candidates
-- Last number / "New" / ➕ → Step 1b: create workstream
+- Number or workstream name → chosen
+- "All" / "overview" → brief snapshot for each, then candidates
+- Last number / "New" / + → create new workstream:
+  1. Ask name and keywords
+  2. `node "$MEM" add-workstream <name> <keywords>`
+  3. `node "$MEM" note "NEW_WORKSTREAM: <name> keywords: <keywords>"`
 
----
-
-## Step 1b: Create new workstream (if ➕ selected)
-
-Ask:
-1. **Name**: "What should the workstream be called?" (e.g. `auth-refactor`, `mobile-fix`)
-2. **Keywords**: "Which keywords to use for finding related files?" (e.g. `auth, login, session, token`)
-
-Update `workstreams.json`:
-
-```bash
-# Read current, add new, write
-node -e "
-const fs = require('fs');
-const p = '$MEM_DIR/workstreams.json';
-const data = fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf-8')) : {};
-data['{name}'] = [{keywords}];
-fs.writeFileSync(p, JSON.stringify(data, null, 2));
-console.log('Added workstream: {name}');
-"
-```
-
-Create directory and initial file:
-
-```bash
-mkdir -p "$MEM_DIR/workstreams"
-```
-
-Write note:
-
-```bash
-node "$MEM" note "NEW_WORKSTREAM: {name} keywords: {keywords}"
-```
-
-Go to Step 3 with the new workstream.
-
----
-
-## Step 2: Git status
+### git phase
 
 ```bash
 git status
@@ -90,31 +70,21 @@ git log --oneline -5
 git branch --show-current
 ```
 
-If there are uncommitted changes — report and ask: "Commit or continue on top?"
+If uncommitted changes — report and ask: "Commit or continue on top?"
 If the last commit was >5 days ago — note it.
 
----
-
-## Step 3: Task plan (brief first)
-
-Load the workstream with `--brief` to save context:
+### workstream-detail phase
 
 ```bash
 node "$MEM" --dir="$MEM_DIR" workstream <name> --brief
 ```
 
-Show only the brief snapshot:
-- How many tasks [ ] / [x]
-- What is blocked
-- What can be picked up now
+Show only: task count, blocked items, available items.
+Do NOT load full file contents yet.
 
-**Do NOT load full file contents yet.** Full context loads only after the user picks a specific task in Step 4.
+### candidates phase
 
----
-
-## Step 4: Focus candidates
-
-Format:
+Pick up to 3 unblocked tasks. Format:
 
 ```text
 ## Session YYYY-MM-DD
@@ -128,72 +98,49 @@ b. <task> — <SP> — why now
 c. <task> — <SP> — why now
 ```
 
----
+Use letters `a. b. c.` (not numbers — numbers are for workstreams).
 
-## Step 5: Model recommendation
+Model recommendation per candidate:
 
-For each candidate — suggest a model based on work type:
+| Task type | Model |
+| --- | --- |
+| Planning, architecture, new domain | Opus |
+| Coding from a ready plan | Sonnet |
+| Routine: translations, pattern copying | Haiku |
+| Review, analysis, refactoring | Sonnet/Opus |
 
-| Task type | Model | Why |
-| --- | --- | --- |
-| Planning, architecture, new domain | Opus | exploration, reasoning needed |
-| Coding from a ready plan, scaffold | Sonnet | execution by rules |
-| Routine: translations, pattern copying | Haiku | cheap, rules are sufficient |
-| Review, analysis, refactoring | Sonnet/Opus | depends on depth |
+Ask: "What do we do? Pick from candidates? Model ok?"
 
-Format: after each candidate — `→ recommendation: Sonnet (execution by pattern)`
+### task-card phase
 
----
-
-## Step 6: Ask
-
-"What do we do? Or pick from the candidates? Model ok or switch?"
-
----
-
-## Step 7: Task card
-
-After the user picks a focus — build a structured task card from available context (plan.md, handoff, memory). Do NOT ask the user to fill in fields manually — gather everything yourself, then confirm.
-
-### Required field
-
-- **What**: one sentence — what we're doing and why
-
-### Auto-filled from context
-
-- **Workstream**: chosen workstream name
-- **Files**: key files to read/modify (from plan.md, handoff, or grep)
-- **AP-ID**: if exists in plan.md
-- **Depends on**: blockers, if any
-
-### Format
+After user picks — build a task card from context (handoff, memory, and project backlog if one exists). Do NOT ask the user to fill in fields manually — gather everything yourself, then confirm.
 
 ```text
 ### Task
-What: <sentence>
+What: <one sentence — what and why>
 Workstream: <name>
 Files: <path1>, <path2>
-AP: <AP-ID or —>
-Depends: <blockers or —>
+AP: <AP-ID or ->
+Depends: <blockers or ->
 ```
 
-Show the card, ask: "Start? Or adjust?"
+Ask: "Start? Or adjust?"
 
-After confirmation — save as session label:
+After confirmation — save:
 
 ```bash
 node "$MEM" --dir="$MEM_DIR" note "SESSION_START branch:$(git branch --show-current) workstream:<chosen> focus:<what>"
 ```
 
-Then load full context for the listed files and begin work.
+### work phase
 
----
+Load full context for files listed in the task card. Begin work.
 
 ## Rules
 
-- Do not read entire files — only headers and [ ] tasks
+- Do not read entire files until work phase — only headers and [ ] tasks
 - Do not suggest more than 3 candidates
-- If there are blocked tasks (waiting for mockups/backend) — note them, do not suggest
-- When a workstream argument is provided — go deeper into context immediately, without a general overview
+- Blocked tasks — note them, do not suggest
+- When a workstream argument is provided — go deeper into context immediately
 - If the previous session ended with compact — check what the last action was via `/session-restore`
-- **Never skip Step 1 workstream menu**, even when startup hook context is available in system prompt. Hook context enriches Step 4 candidates — it does not replace the explicit selection step. The user must choose the workstream, not the assistant.
+- **Never skip the context phase workstream menu**, even when startup hook context is available. Hook context enriches candidates — it does not replace the explicit selection step.
