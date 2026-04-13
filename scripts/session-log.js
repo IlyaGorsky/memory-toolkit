@@ -75,6 +75,18 @@ if (fs.existsSync(memoryMdPath)) {
   }
 }
 
+// Run health check
+let healthWarnings = '';
+try {
+  const memJs = path.join(__dirname, 'memory.js');
+  const healthOut = execSync(`node "${memJs}" --dir="${memoryDir}" health`, {
+    encoding: 'utf8', timeout: 5000,
+  }).trim();
+  if (!healthOut.includes('healthy')) {
+    healthWarnings = healthOut;
+  }
+} catch {}
+
 // Build JSON output for CC hook protocol
 const output = {};
 
@@ -85,13 +97,20 @@ const version = (() => {
     return pkg.version || '';
   } catch { return ''; }
 })();
-output.systemMessage = `[memory-toolkit${version ? ' v' + version : ''}] session logged | branch: ${branch || 'unknown'}`;
+let statusMsg = `[memory-toolkit${version ? ' v' + version : ''}] session logged | branch: ${branch || 'unknown'}`;
+if (healthWarnings) {
+  statusMsg += ' | ⚠ memory health issues detected';
+}
+output.systemMessage = statusMsg;
 
 // Context injection: handoff + DOC reminder
 let context = '';
 const handoffPath = path.join(memoryDir, 'workstreams', 'handoff.md');
 if (fs.existsSync(handoffPath)) {
   context += fs.readFileSync(handoffPath, 'utf8') + '\n';
+}
+if (healthWarnings) {
+  context += '---\nMemory health issues:\n' + healthWarnings + '\n';
 }
 context += [
   '---',

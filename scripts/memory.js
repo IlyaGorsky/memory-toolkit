@@ -488,6 +488,120 @@ function reindex() {
     console.log(`Reindexed MEMORY.md: ${linesAfter} lines${evicted > 0 ? ` (${evicted} low-weight entries evicted)` : ''}`);
 }
 
+// --- Health check ---
+
+const STALE_DAYS = 30;
+const MEMORY_MD_WARN_LINES = 150;
+const MEMORY_MD_MAX_LINES = 200;
+
+function health() {
+    const issues = [];
+    const memoryMdPath = path.join(MEMORY_DIR, 'MEMORY.md');
+
+    // 1. MEMORY.md size
+    if (fs.existsSync(memoryMdPath)) {
+        const lines = fs.readFileSync(memoryMdPath, 'utf-8').split('\n').length;
+        if (lines > MEMORY_MD_MAX_LINES) {
+            issues.push({ level: 'error', check: 'size', message: `MEMORY.md is ${lines} lines (max ${MEMORY_MD_MAX_LINES}). Run: memory.js reindex` });
+        } else if (lines > MEMORY_MD_WARN_LINES) {
+            issues.push({ level: 'warn', check: 'size', message: `MEMORY.md is ${lines}/${MEMORY_MD_MAX_LINES} lines. Consider trimming.` });
+        }
+
+        // 2. Dead links in MEMORY.md
+        const content = fs.readFileSync(memoryMdPath, 'utf-8');
+        const linkPattern = /\[.*?\]\((.*?\.md)\)/g;
+        let match;
+        while ((match = linkPattern.exec(content)) !== null) {
+            const linkPath = match[1];
+            const fullPath = path.join(MEMORY_DIR, linkPath);
+            if (!fs.existsSync(fullPath)) {
+                issues.push({ level: 'error', check: 'dead-link', message: `Dead link in MEMORY.md: ${linkPath}` });
+            }
+        }
+    } else {
+        issues.push({ level: 'warn', check: 'missing', message: 'No MEMORY.md found. Run: memory.js reindex' });
+    }
+
+    // 3. Stale files
+    const now = Date.now();
+    const staleCutoff = now - STALE_DAYS * 24 * 60 * 60 * 1000;
+    const allFiles = getAllFiles();
+    const staleFiles = [];
+    for (const f of allFiles) {
+        try {
+            const stat = fs.statSync(f.path);
+            if (stat.mtime.getTime() < staleCutoff) {
+                staleFiles.push(f);
+            }
+        } catch {}
+    }
+    if (staleFiles.length > 0) {
+        issues.push({
+            level: 'info',
+            check: 'stale',
+            message: `${staleFiles.length} file(s) older than ${STALE_DAYS} days`,
+            files: staleFiles.map(f => path.relative(MEMORY_DIR, f.path)),
+        });
+    }
+
+    // 4. Duplicate descriptions
+    const descMap = new Map();
+    for (const f of allFiles) {
+        const desc = (f.frontmatter.description || '').toLowerCase().trim();
+        if (!desc) continue;
+        if (descMap.has(desc)) {
+            descMap.get(desc).push(path.relative(MEMORY_DIR, f.path));
+        } else {
+            descMap.set(desc, [path.relative(MEMORY_DIR, f.path)]);
+        }
+    }
+    for (const [desc, files] of descMap) {
+        if (files.length > 1) {
+            issues.push({ level: 'warn', check: 'duplicate', message: `Duplicate description: "${desc.slice(0, 60)}" in ${files.join(', ')}` });
+        }
+    }
+
+    // 5. Workstreams staleness
+    if (fs.existsSync(workstreamsPath)) {
+        try {
+            const stat = fs.statSync(workstreamsPath);
+            const daysSinceUpdate = Math.floor((now - stat.mtime.getTime()) / (24 * 60 * 60 * 1000));
+            if (daysSinceUpdate > STALE_DAYS) {
+                issues.push({ level: 'info', check: 'workstreams-stale', message: `workstreams.json not updated in ${daysSinceUpdate} days` });
+            }
+        } catch {}
+    }
+
+    // Output
+    if (issues.length === 0) {
+        console.log('✓ Memory healthy — no issues found');
+        return issues;
+    }
+
+    const errors = issues.filter(i => i.level === 'error');
+    const warns = issues.filter(i => i.level === 'warn');
+    const infos = issues.filter(i => i.level === 'info');
+
+    if (errors.length) {
+        console.log(`\n✗ ${errors.length} error(s):`);
+        errors.forEach(i => console.log(`  - ${i.message}`));
+    }
+    if (warns.length) {
+        console.log(`\n⚠ ${warns.length} warning(s):`);
+        warns.forEach(i => console.log(`  - ${i.message}`));
+    }
+    if (infos.length) {
+        console.log(`\nℹ ${infos.length} info:`);
+        infos.forEach(i => {
+            console.log(`  - ${i.message}`);
+            if (i.files) i.files.forEach(f => console.log(`      ${f}`));
+        });
+    }
+
+    console.log(`\nTotal: ${errors.length} errors, ${warns.length} warnings, ${infos.length} info`);
+    return issues;
+}
+
 // --- Router ---
 
 const commands = {
@@ -503,6 +617,7 @@ const commands = {
     docs: printDocs,
     recurring: printRecurring,
     reindex,
+    health,
     dir: () => console.log(MEMORY_DIR),
 };
 
@@ -525,6 +640,7 @@ if (require.main === module) {
         console.log('  docs                   — collect DOC: notes');
         console.log('  recurring              — find recurring feedback patterns');
         console.log('  reindex                — rebuild MEMORY.md index sorted by weight');
+        console.log('  health                 — check memory health (dead links, stale, size, dupes)');
         console.log('  dir                    — memory directory path');
     } else {
         commands[cmd](...args);
@@ -547,4 +663,5 @@ module.exports = {
     note,
     queryDocs,
     queryRecurring,
+    health,
 };

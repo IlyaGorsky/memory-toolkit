@@ -262,4 +262,73 @@ describe('memory.js', () => {
       assert.ok(result.includes('No recurring'));
     });
   });
+
+  // --- health ---
+
+  describe('health', () => {
+    it('reports healthy on clean memory', () => {
+      writeFile('feedback/ok.md', '---\nname: ok\ndescription: test\ntype: feedback\n---\nContent');
+      writeFile('MEMORY.md', '# Memory\n- [ok](feedback/ok.md) — test\n');
+
+      const result = run('health');
+      assert.ok(result.includes('healthy'));
+    });
+
+    it('detects dead links in MEMORY.md', () => {
+      writeFile('MEMORY.md', '# Memory\n- [gone](feedback/deleted.md) — was here\n');
+
+      const result = run('health');
+      assert.ok(result.includes('Dead link'));
+      assert.ok(result.includes('feedback/deleted.md'));
+    });
+
+    it('warns when MEMORY.md exceeds 150 lines', () => {
+      const lines = ['# Memory'];
+      for (let i = 0; i < 160; i++) {
+        lines.push(`- Line ${i}`);
+      }
+      writeFile('MEMORY.md', lines.join('\n'));
+
+      const result = run('health');
+      assert.ok(result.includes('warning'));
+    });
+
+    it('errors when MEMORY.md exceeds 200 lines', () => {
+      const lines = ['# Memory'];
+      for (let i = 0; i < 210; i++) {
+        lines.push(`- Line ${i}`);
+      }
+      writeFile('MEMORY.md', lines.join('\n'));
+
+      const result = run('health');
+      assert.ok(result.includes('error'));
+      assert.ok(result.includes('reindex'));
+    });
+
+    it('detects stale files (>30 days)', () => {
+      const filePath = path.join(TMP, 'feedback', 'old.md');
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, '---\nname: old\ndescription: ancient\ntype: feedback\n---\nOld content');
+      // Set mtime to 60 days ago
+      const oldTime = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+      fs.utimesSync(filePath, oldTime, oldTime);
+
+      const result = run('health');
+      assert.ok(result.includes('older than 30 days'));
+    });
+
+    it('detects duplicate descriptions', () => {
+      writeFile('feedback/one.md', '---\nname: one\ndescription: Same exact description\ntype: feedback\n---\nFirst');
+      writeFile('feedback/two.md', '---\nname: two\ndescription: Same exact description\ntype: feedback\n---\nSecond');
+
+      const result = run('health');
+      assert.ok(result.includes('Duplicate'));
+    });
+
+    it('reports no issues on empty memory dir', () => {
+      // TMP exists but is empty (no MEMORY.md)
+      const result = run('health');
+      assert.ok(result.includes('No MEMORY.md'));
+    });
+  });
 });
