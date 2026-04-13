@@ -711,6 +711,101 @@ describe('e2e: isolated sandbox', () => {
     });
   });
 
+  // --- Pipeline validation ---
+
+  describe('task-template pipeline validation', () => {
+    it('validate-pipeline passes for all templates', () => {
+      const result = execSync(
+        `node "${path.join(PLUGIN_ROOT, 'scripts', 'validate-pipeline.js')}" --all`,
+        { encoding: 'utf8', timeout: 5000 }
+      );
+      assert.ok(result.includes('valid'), 'all pipelines should be valid');
+      assert.ok(!result.includes('error'), 'no errors expected');
+    });
+
+    it('pipeline schema file exists and is valid JSON', () => {
+      const schemaPath = path.join(PLUGIN_ROOT, 'skills', 'task-template', 'pipeline.schema.json');
+      assert.ok(fs.existsSync(schemaPath), 'pipeline.schema.json should exist');
+      const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
+      assert.equal(schema.title, 'Task Template Pipeline');
+      assert.ok(schema.$defs.phase, 'schema should define phase');
+      assert.ok(schema.$defs.step, 'schema should define step');
+    });
+
+    it('validate-pipeline detects missing id', () => {
+      const badYaml = path.join(sandbox, 'bad-no-id.yaml');
+      fs.writeFileSync(badYaml, [
+        'name: bad',
+        'phases:',
+        '  - description: no id here',
+        '    steps:',
+        '      - description: step',
+      ].join('\n'));
+      try {
+        execSync(
+          `node "${path.join(PLUGIN_ROOT, 'scripts', 'validate-pipeline.js')}" "${badYaml}"`,
+          { encoding: 'utf8', timeout: 5000 }
+        );
+        assert.fail('should have exited with error');
+      } catch (e) {
+        assert.ok(e.stderr.includes('missing') || e.stdout.includes('missing'), 'should report missing id');
+      }
+    });
+
+    it('validate-pipeline detects broken depends', () => {
+      const badYaml = path.join(sandbox, 'bad-depends.yaml');
+      fs.writeFileSync(badYaml, [
+        'name: bad',
+        'phases:',
+        '  - id: start',
+        '    description: first',
+        '    steps:',
+        '      - description: step',
+        '    verify: check',
+        '  - id: end',
+        '    description: last',
+        '    depends: [nonexistent]',
+        '    steps:',
+        '      - description: step',
+      ].join('\n'));
+      try {
+        execSync(
+          `node "${path.join(PLUGIN_ROOT, 'scripts', 'validate-pipeline.js')}" "${badYaml}"`,
+          { encoding: 'utf8', timeout: 5000 }
+        );
+        assert.fail('should have exited with error');
+      } catch (e) {
+        assert.ok(e.stderr.includes('does not exist'), 'should report broken depends');
+      }
+    });
+
+    it('validate-pipeline detects missing verify gates', () => {
+      const badYaml = path.join(sandbox, 'bad-no-verify.yaml');
+      fs.writeFileSync(badYaml, [
+        'name: bad',
+        'phases:',
+        '  - id: start',
+        '    description: first',
+        '    steps:',
+        '      - description: step',
+        '  - id: end',
+        '    description: last',
+        '    depends: [start]',
+        '    steps:',
+        '      - description: step',
+      ].join('\n'));
+      try {
+        execSync(
+          `node "${path.join(PLUGIN_ROOT, 'scripts', 'validate-pipeline.js')}" "${badYaml}"`,
+          { encoding: 'utf8', timeout: 5000 }
+        );
+        assert.fail('should have exited with error');
+      } catch (e) {
+        assert.ok(e.stderr.includes('verify'), 'should report missing verify gates');
+      }
+    });
+  });
+
   // --- Version consistency ---
 
   describe('version consistency', () => {

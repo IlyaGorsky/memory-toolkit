@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../pipeline.schema.json
 name: session-start
 description: Cold session start pipeline — context, git, candidates, task card, work
 

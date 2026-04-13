@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Task Template Pipeline",
+  "description": "YAML pipeline schema for memory-toolkit task-template orchestrator",
+  "type": "object",
+  "required": ["name", "phases"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Pipeline name (matches template filename)"
+    },
+    "description": {
+      "type": "string",
+      "description": "What this pipeline does"
+    },
+    "phases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/phase" }
+    }
+  },
+  "$defs": {
+    "phase": {
+      "type": "object",
+      "required": ["id", "description", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Unique phase identifier (lowercase, dashes)"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "depends": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true,
+          "description": "Phase ids that must complete before this one"
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/step" }
+        },
+        "output": {
+          "type": "string",
+          "description": "What this phase produces for downstream phases"
+        },
+        "verify": {
+          "type": "string",
+          "description": "Gate condition — must pass before dependents can run"
+        },
+        "for_each": {
+          "type": "string",
+          "description": "Iterate over items from a previous phase output"
+        },
+        "parallel": {
+          "type": "boolean",
+          "description": "Run steps in parallel within this phase"
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "run": {
+          "type": "string",
+          "description": "Shell command to execute"
+        },
+        "skill": {
+          "type": "string",
+          "description": "Skill name to invoke"
+        },
+        "args": {
+          "type": "string",
+          "description": "Arguments for skill invocation"
+        },
+        "read": {
+          "type": "string",
+          "description": "File or pattern to read"
+        }
+      }
+    }
+  }
+}
