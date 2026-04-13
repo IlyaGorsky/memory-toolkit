@@ -24,6 +24,8 @@ const THROTTLE_MS = 3 * 60 * 1000; // run at most every 3 minutes
 const MIN_NEW_MESSAGES = 6;          // need at least 6 new messages to analyze
 const MODEL = 'claude-haiku-4-5-20251001';
 const MAX_TOKENS = 1024;
+const SUGGEST_REFLECT_THRESHOLD = 8;  // suggest /reflect after N accumulated findings
+const SUGGEST_DOCS_THRESHOLD = 3;     // suggest /docs-reflect after N DOC findings
 
 // --- Read stdin (PostToolUse hook passes JSON with session_id, transcript_path) ---
 let stdinPayload = {};
@@ -39,7 +41,7 @@ const statePath = path.join(memoryDir, '.watcher-state.json');
 
 function loadState() {
   try { return JSON.parse(fs.readFileSync(statePath, 'utf8')); }
-  catch { return { offset: 0, lastRun: 0, transcriptPath: '' }; }
+  catch { return { offset: 0, lastRun: 0, transcriptPath: '', findingsCount: 0, docCount: 0, suggestedReflect: false, suggestedDocs: false }; }
 }
 
 function saveState(state) {
@@ -105,21 +107,28 @@ function extractText(msg) {
 // --- LLM analysis ---
 const ANALYSIS_PROMPT = `You are a session watcher. Analyze the conversation fragment below and extract ONLY genuinely important items. Be very selective — most conversations have nothing worth saving.
 
-Extract:
-- **corrections**: when the user corrects the assistant's approach or understanding (not just minor clarifications)
-- **decisions**: explicit choices made during discussion that affect future work (not routine confirmations)
-- **plans**: execution strategies or multi-step approaches that were agreed upon
+Extract findings:
+- **correction**: when the user corrects the assistant's approach or understanding (not just minor clarifications)
+- **decision**: explicit choices made during discussion that affect future work (not routine confirmations)
+- **plan**: execution strategies or multi-step approaches that were agreed upon
 - **documentation**: surprising platform behaviors, non-obvious constraints, or architectural insights that a future contributor wouldn't find without digging
+
+Also detect the current work phase:
+- **planning**: discussing approach, architecture, design, reading code to understand
+- **implementation**: writing code, creating files, making changes
+- **review**: testing, reviewing diffs, fixing lint/types, running CI
+- **debug**: investigating errors, reading logs, diagnosing issues
 
 Return JSON (no markdown, no explanation):
 {
   "findings": [
     {"type": "correction|decision|plan|documentation", "summary": "one sentence, concise"}
-  ]
+  ],
+  "phase": "planning|implementation|review|debug|null"
 }
 
-If nothing important — return {"findings": []}.
-Be strict: routine tool calls, file reads, standard operations are NOT findings.`;
+If nothing important — return {"findings": [], "phase": null}.
+Set phase to null if unclear. Be strict: routine tool calls, file reads, standard operations are NOT findings.`;
 
 function buildConversationText(messages) {
   return messages.map(m => {
@@ -128,6 +137,7 @@ function buildConversationText(messages) {
   }).join('\n\n');
 }
 
+// Returns { findings: [...], phase: string|null }
 function callLLM(conversationText) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (apiKey) return callAPI(apiKey, conversationText);
@@ -168,8 +178,8 @@ function callAPI(apiKey, conversationText) {
       });
     });
 
-    req.on('error', () => resolve([]));
-    req.setTimeout(15000, () => { req.destroy(); resolve([]); });
+    req.on('error', () => resolve({ findings: [], phase: null }));
+    req.setTimeout(15000, () => { req.destroy(); resolve({ findings: [], phase: null }); });
     req.write(body);
     req.end();
   });
@@ -184,7 +194,7 @@ function callCLI(conversationText) {
     );
     return parseFindings(result);
   } catch {
-    return [];
+    return { findings: [], phase: null };
   }
 }
 
@@ -192,11 +202,11 @@ function parseFindings(text) {
   try {
     // Extract JSON from response (may have markdown wrapper)
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return [];
+    if (!jsonMatch) return { findings: [], phase: null };
     const json = JSON.parse(jsonMatch[0]);
-    return json.findings || [];
+    return { findings: json.findings || [], phase: json.phase || null };
   } catch {
-    return [];
+    return { findings: [], phase: null };
   }
 }
 
@@ -273,35 +283,89 @@ async function main() {
   const transcriptPath = findTranscript();
   if (!transcriptPath) exitJson();
 
-  // Reset offset if transcript changed
-  const offset = (transcriptPath === state.transcriptPath) ? state.offset : 0;
+  // Reset offset and counters if transcript changed (new session)
+  const newSession = transcriptPath !== state.transcriptPath;
+  const offset = newSession ? 0 : state.offset;
 
   // Read new messages
   const { messages, newOffset } = readNewMessages(transcriptPath, offset);
 
-  // Save state early
-  saveState({
+  // Carry over counters (reset on new session)
+  let findingsCount = newSession ? 0 : (state.findingsCount || 0);
+  let docCount = newSession ? 0 : (state.docCount || 0);
+  let suggestedReflect = newSession ? false : (state.suggestedReflect || false);
+  let suggestedDocs = newSession ? false : (state.suggestedDocs || false);
+
+  // Current phase (updated after LLM call)
+  let currentPhase = newSession ? null : (state.phase || null);
+
+  // Save state (counters updated after analysis below)
+  const persistState = () => saveState({
     offset: newOffset,
     lastRun: now,
     transcriptPath,
+    findingsCount,
+    docCount,
+    suggestedReflect,
+    suggestedDocs,
+    phase: currentPhase,
   });
 
   // Need minimum messages to analyze
   if (messages.length < MIN_NEW_MESSAGES) {
     log.debug('watcher: not enough messages', { count: messages.length, min: MIN_NEW_MESSAGES });
+    persistState();
     exitJson();
   }
 
   // Analyze with LLM
   const conversationText = buildConversationText(messages);
-  const findings = await callLLM(conversationText);
+  const { findings, phase } = await callLLM(conversationText);
+
+  // Track phase transitions
+  if (phase) currentPhase = phase;
+  const prevPhase = newSession ? null : (state.phase || null);
+  if (phase && phase !== prevPhase) {
+    log.info('phase change', { from: prevPhase, to: phase });
+    // Save phase transition as a note
+    const memJs = findMemoryJs();
+    if (memJs) {
+      try {
+        const label = `WATCH:PHASE ${phase}` + (prevPhase ? ` (was: ${prevPhase})` : '');
+        execSync(
+          `node "${memJs}" --dir="${memoryDir}" note "${label}"`,
+          { timeout: 5000, stdio: 'ignore' }
+        );
+      } catch {}
+    }
+  }
 
   if (findings && findings.length) {
     saveFindings(findings);
+    findingsCount += findings.length;
+    docCount += findings.filter(f => f.type === 'documentation').length;
+
     const summary = findings.map(f => `${f.type}: ${f.summary}`).join('; ');
-    log.info('watcher findings', { count: findings.length, summary });
-    exitJson({ systemMessage: `[memory-toolkit watcher] ${findings.length} finding(s) saved` });
+    log.info('watcher findings', { count: findings.length, total: findingsCount, docTotal: docCount, summary });
+
+    // Build output message
+    let msg = `[memory-toolkit watcher] ${findings.length} finding(s) saved`;
+
+    // Suggest /docs-reflect when DOC findings accumulate
+    if (docCount >= SUGGEST_DOCS_THRESHOLD && !suggestedDocs) {
+      msg += ` | 💡 ${docCount} documentation findings this session — consider /docs-reflect`;
+      suggestedDocs = true;
+    }
+    // Suggest /reflect when total findings accumulate
+    else if (findingsCount >= SUGGEST_REFLECT_THRESHOLD && !suggestedReflect) {
+      msg += ` | 💡 ${findingsCount} findings this session — consider /reflect`;
+      suggestedReflect = true;
+    }
+
+    persistState();
+    exitJson({ systemMessage: msg });
   } else {
+    persistState();
     exitJson();
   }
 }
