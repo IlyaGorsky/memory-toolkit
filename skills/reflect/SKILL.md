@@ -46,6 +46,24 @@ Review what happened and find:
 - **Insights** — decisions worth scaling to other areas
 - **Done** — what from backlog was completed this session
 
+### DOC classification check
+
+For each insight, ask: "Should any contributor to this project know this?" If yes — it's a DOC, not just a backlog item or feedback. Save it immediately:
+
+```bash
+node "$MEM" --dir="$MEM_DIR" note "DOC: <domain> — <insight>"
+```
+
+Examples of what IS a DOC:
+- Tool/framework choices: "use node:test, not vitest" — project convention
+- Architecture decisions: "services return null, not throw" — pattern everyone must follow
+- Build/deploy constraints: "no external deps in hooks" — technical requirement
+
+Examples of what is NOT a DOC:
+- Personal workflow preference: "I prefer short commit messages"
+- One-time workaround: "had to restart dev server"
+- Backlog item: "refactor auth module"
+
 ## 3. Propose items
 
 Show list in format:

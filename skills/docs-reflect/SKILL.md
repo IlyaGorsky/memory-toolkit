@@ -33,7 +33,11 @@ This scans `feedback/` files for clusters — similar corrections that appeared 
 
 If both sources are empty — tell user "No documentation findings." and stop.
 
-If recurring patterns found — highlight them: "This feedback appeared N times across sessions. Strong candidate for `.claude/rules/`."
+If recurring patterns found (3+ occurrences) — these are project conventions, not personal preferences. Treat them as DOC automatically:
+- Save as DOC note: `node "$MEM" --dir="$MEM_DIR" note "DOC: <domain> — <generalized rule from recurring feedback>"`
+- Highlight to user: "This feedback appeared N times — promoting to project rule."
+
+Patterns with 2 occurrences — mention as candidates but don't auto-promote.
 
 ---
 
