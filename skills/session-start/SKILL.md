@@ -95,14 +95,20 @@ If the last commit was >5 days ago — note it.
 
 ---
 
-## Step 3: Task plan
+## Step 3: Task plan (brief first)
 
-Read the source of truth for the current workstream from MEMORY.md → Workstreams.
+Load the workstream with `--brief` to save context:
 
-Show a brief snapshot:
+```bash
+node "$MEM" --dir="$MEM_DIR" workstream <name> --brief
+```
+
+Show only the brief snapshot:
 - How many tasks [ ] / [x]
 - What is blocked
 - What can be picked up now
+
+**Do NOT load full file contents yet.** Full context loads only after the user picks a specific task in Step 4.
 
 ---
 
