@@ -54,59 +54,53 @@ memory-toolkit saves the session.
 
 ### Session lifecycle
 
-```text
-                          ┌─────────────────────────────────────────────────┐
-                          │              SESSION LIFECYCLE                   │
-                          └─────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph START ["/session-start"]
+        S1["Load handoff"]
+        S2["Health check"]
+        S3["Show focus candidates"]
+        S4["Suggest model"]
+    end
 
- ┌──────────────────┐                                    ┌──────────────────┐
- │  /session-start  │                                    │   /session-end   │
- │                  │                                    │                  │
- │ • load handoff   │                                    │ • save handoff   │
- │ • health check   │         YOU WORK HERE              │ • /reflect       │
- │ • show focus     │                                    │ • /docs-reflect  │
- │ • suggest model  │                                    │                  │
- └────────┬─────────┘                                    └────────▲─────────┘
-          │                                                       │
-          ▼                                                       │
- ┌────────────────────────────────────────────────────────────────┴────────┐
- │                                                                         │
- │   ┌─ SessionStart hook ──────────────────────────────────────────────┐  │
- │   │  session-log.js: log session, inject handoff, run health check  │  │
- │   └─────────────────────────────────────────────────────────────────┘  │
- │                                                                         │
- │   ┌─ PostToolUse hook (every tool call) ─────────────────────────────┐  │
- │   │  session-watcher.js (every 3 min, min 6 new messages):          │  │
- │   │  • transcript → Haiku → corrections, decisions, plans, docs     │  │
- │   │  • phase detection (planning → implementation → review → debug) │  │
- │   │  • nudge /reflect after 8 findings, /docs-reflect after 3 DOC   │  │
- │   └─────────────────────────────────────────────────────────────────┘  │
- │                                                                         │
- │   ┌─ PostToolUse hook (git commit) ──────────────────────────────────┐  │
- │   │  COMMIT: <message> → notes/<today>.md                           │  │
- │   └─────────────────────────────────────────────────────────────────┘  │
- │                                                                         │
- │   ┌─ SubagentStop hook ──────────────────────────────────────────────┐  │
- │   │  session-watcher.js (same as above, for subagent turns)         │  │
- │   └─────────────────────────────────────────────────────────────────┘  │
- │                                                                         │
- │   ┌─ PreCompact hook ────────────────────────────────────────────────┐  │
- │   │  session-save.js: auto-save branch, commit, uncommitted count   │  │
- │   └─────────────────────────────────────────────────────────────────┘  │
- │                                                                         │
- │   /park ── save idea without losing thought                             │
- │   /memory ── search, list, query on demand                              │
- │                                                                         │
- └─────────────────────────────────────────────────────────────────────────┘
-          │                                                       │
-          ▼                                                       ▼
- ┌─────────────────────────────────────────────────────────────────────────┐
- │                     ~/.claude/projects/<project>/memory/                 │
- │                                                                         │
- │   MEMORY.md ← index       workstreams/handoff.md ← session continuity  │
- │   notes/<today>.md         feedback/ decisions/ reference/              │
- │   sessions.jsonl           .watcher-state.json (phase, counters)        │
- └─────────────────────────────────────────────────────────────────────────┘
+    subgraph WORK ["You work here"]
+        direction TB
+
+        H1["<b>SessionStart hook</b><br/>session-log.js: log session,<br/>inject handoff, health check"]
+
+        H2["<b>PostToolUse hook</b> · every tool call<br/>session-watcher.js (every 3 min, 6+ msgs):<br/>transcript → Haiku → corrections, decisions, plans, docs<br/>phase detection · nudge /reflect after 8 · /docs-reflect after 3"]
+
+        H3["<b>PostToolUse hook</b> · git commit<br/>COMMIT: message → notes/today.md"]
+
+        H4["<b>SubagentStop hook</b><br/>session-watcher.js for subagent turns"]
+
+        H5["<b>PreCompact hook</b><br/>session-save.js: branch, commit, uncommitted"]
+
+        SK["/park · /memory — on demand"]
+
+        H1 ~~~ H2 ~~~ H3 ~~~ H4 ~~~ H5 ~~~ SK
+    end
+
+    subgraph END_ ["/session-end"]
+        E1["Save handoff"]
+        E2["/reflect"]
+        E3["/docs-reflect"]
+    end
+
+    subgraph STORAGE ["~/.claude/projects/&lt;project&gt;/memory/"]
+        direction LR
+        F1["MEMORY.md — index"]
+        F2["workstreams/handoff.md"]
+        F3["notes/ · feedback/ · decisions/"]
+        F4["sessions.jsonl · .watcher-state.json"]
+    end
+
+    START --> WORK
+    WORK --> END_
+    END_ -- "workstreams/handoff.md" --> START
+    WORK --> STORAGE
+    END_ --> STORAGE
+    STORAGE --> START
 ```
 
 ### Use case 1: Context survives compaction
