@@ -14,12 +14,17 @@ Pipelines exist as a **guardrail against step-skipping**. Prose in SKILL.md can 
 
 ## How to use
 
-When a skill is invoked — manually (`/skill-name`) or via a `skill:` step from another pipeline — check its frontmatter for `metadata.pipeline: true`:
+Pipeline detection is automatic via the `PreToolUse` hook `scripts/pipeline-hint.js`. When the `Skill` tool is invoked, the hook reads the target skill's frontmatter and — if `metadata.pipeline: true` is set — injects this orchestrator contract into the tool-call context as `additionalContext`.
 
-- **marker present** → load the pipeline by filename convention at `${CLAUDE_PLUGIN_ROOT}/skills/task-template/templates/<skill-name>.yaml` and execute it through this orchestrator's rules. The YAML is the contract: no phase skipping, no gate bypass, no ignored `verify`. Prose in SKILL.md provides per-step context but cannot soften the contract.
-- **marker absent** → plain prose skill. Follow SKILL.md directly. No structural enforcement.
+Filename convention: skill `session-end` ⇄ template `${CLAUDE_PLUGIN_ROOT}/skills/task-template/templates/session-end.yaml`. The hook resolves the template path and passes it in the injected contract.
 
-Filename convention: skill `session-end` ⇄ template `session-end.yaml`. The marker triggers the lookup; the filename resolves the path.
+When you receive a "PIPELINE SKILL DETECTED" notice:
+
+- **do NOT** follow the prose in the target skill's SKILL.md as a script
+- **do** load the YAML at the path provided, print the plan banner, announce each phase, and honor `depends` / `when` / `verify` / `retry_from`
+- Prose in the target SKILL.md is per-phase reference, not a script — it cannot soften the contract
+
+If the hook did not fire (e.g., skill invoked outside the plugin environment), you can fall back to checking frontmatter yourself: `metadata.pipeline: true` in the invoked SKILL.md means load the matching YAML and run it through this orchestrator.
 
 ## Execution rules
 
@@ -68,37 +73,41 @@ phases:
 
 ## Visible markers (MUST)
 
-Pipeline execution MUST be visible to the user. Two markers, both mandatory:
+Pipeline execution MUST be visible to the user. Markers use plain ASCII fences (`=`, `>>>`, `---`) so they survive any renderer — no brackets, arrows, or Unicode symbols that some IDEs strip or interpret as links.
 
 **1. Plan banner — printed ONCE before any phase runs:**
 
 ```
-Pipeline: <template-name>
+==================================================
+PIPELINE START: <template-name>  (args: <k=v ...>)
+==================================================
+Wave 1 (no deps):
+  1. phase-a -- description
+  2. phase-b -- description
 
-[first]
-  1. phase-a — description
-  2. phase-b — description
-
-[after 1,2]
-  3. phase-c — description ✓ verify: <condition>
+Wave 2 (after 1,2):
+  3. phase-c -- description | verify: <condition>
+==================================================
+END PLAN -- <N> phases, executing now
+==================================================
 ```
 
 **2. Phase announce — printed BEFORE each phase starts executing:**
 
 ```
-→ [phase-id] description
+>>> PHASE <n>/<N>: <phase-id> -- <description>
 ```
 
 If a phase is skipped via `when: false`:
 
 ```
-⊘ [phase-id] skipped (when: <condition> is false)
+--- SKIP <n>/<N>: <phase-id> (when: <condition> is false)
 ```
 
 If a phase loops via `retry_from`:
 
 ```
-↻ [phase-id] retry → jumping back to <retry_from target>
+!!! RETRY <n>/<N>: <phase-id> -- jumping back to <retry_from target>
 ```
 
 Do NOT ask for confirmation of the plan — the calling skill already confirmed. But DO always print the plan banner and the per-phase announce. Silent execution defeats the purpose of the pipeline.

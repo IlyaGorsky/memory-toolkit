@@ -421,6 +421,20 @@ describe('e2e: isolated sandbox', () => {
       assert.ok(events.includes('PostToolUse'), 'should have PostToolUse');
       assert.ok(events.includes('SessionStart'), 'should have SessionStart');
       assert.ok(events.includes('SubagentStop'), 'should have SubagentStop');
+      assert.ok(events.includes('PreToolUse'), 'should have PreToolUse');
+    });
+
+    it('PreToolUse hook targets Skill tool and runs pipeline-hint', () => {
+      const hooksJson = JSON.parse(
+        fs.readFileSync(path.join(PLUGIN_ROOT, 'hooks', 'hooks.json'), 'utf8')
+      );
+      const preTool = hooksJson.hooks.PreToolUse || [];
+      const skillMatcher = preTool.find(m => m.matcher === 'Skill');
+      assert.ok(skillMatcher, 'PreToolUse should have matcher="Skill"');
+      assert.ok(
+        skillMatcher.hooks[0].command.includes('pipeline-hint'),
+        'Skill PreToolUse should run pipeline-hint.js'
+      );
     });
 
     it('all hook commands use CLAUDE_PLUGIN_ROOT', () => {
@@ -710,6 +724,65 @@ describe('e2e: isolated sandbox', () => {
                         content.includes('confirm') || content.includes('Do NOT write');
         assert.ok(hasGate, `${name} should have a confirmation gate before writing`);
       }
+    });
+  });
+
+  // --- Pipeline hint hook (PreToolUse on Skill) ---
+
+  describe('pipeline-hint.js PreToolUse hook', () => {
+    function hintRun(stdinJson) {
+      try {
+        return execSync(
+          `echo '${JSON.stringify(stdinJson)}' | node "${path.join(PLUGIN_ROOT, 'scripts', 'pipeline-hint.js')}"`,
+          {
+            encoding: 'utf8',
+            timeout: 5000,
+            env: { ...process.env, CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT },
+          }
+        );
+      } catch (e) {
+        return e.stdout || '';
+      }
+    }
+
+    it('injects contract for pipeline skill (session-end)', () => {
+      const out = hintRun({ tool_name: 'Skill', tool_input: { skill: 'session-end', args: 'quick' } });
+      assert.ok(out.trim(), 'should produce output for pipeline skill');
+      const json = JSON.parse(out.trim());
+      assert.equal(json.hookSpecificOutput.hookEventName, 'PreToolUse');
+      assert.ok(json.hookSpecificOutput.additionalContext.includes('PIPELINE SKILL DETECTED: session-end'));
+      assert.ok(json.hookSpecificOutput.additionalContext.includes('PIPELINE START'));
+      assert.ok(json.hookSpecificOutput.additionalContext.includes('session-end.yaml'));
+    });
+
+    it('handles qualified skill name (memory-toolkit:session-start)', () => {
+      const out = hintRun({ tool_name: 'Skill', tool_input: { skill: 'memory-toolkit:session-start' } });
+      assert.ok(out.trim(), 'should produce output');
+      const json = JSON.parse(out.trim());
+      assert.ok(json.hookSpecificOutput.additionalContext.includes('session-start'));
+    });
+
+    it('stays silent for non-pipeline skill (memory)', () => {
+      const out = hintRun({ tool_name: 'Skill', tool_input: { skill: 'memory', args: 'list' } });
+      assert.equal(out.trim(), '', 'no output for non-pipeline skill');
+    });
+
+    it('stays silent for non-Skill tool', () => {
+      const out = hintRun({ tool_name: 'Bash', tool_input: { command: 'ls' } });
+      assert.equal(out.trim(), '', 'no output for Bash tool');
+    });
+
+    it('stays silent for unknown skill', () => {
+      const out = hintRun({ tool_name: 'Skill', tool_input: { skill: 'does-not-exist' } });
+      assert.equal(out.trim(), '', 'no output for unknown skill');
+    });
+
+    it('stays silent for malformed stdin', () => {
+      const out = execSync(
+        `echo 'not json' | node "${path.join(PLUGIN_ROOT, 'scripts', 'pipeline-hint.js')}"`,
+        { encoding: 'utf8', timeout: 5000, env: { ...process.env, CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT } }
+      );
+      assert.equal(out.trim(), '', 'no output for malformed stdin');
     });
   });
 
