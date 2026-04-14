@@ -1,0 +1,97 @@
+# yaml-language-server: $schema=../pipeline.schema.json
+name: session-end
+description: Session completion — handoff, reflect, docs-reflect cascade
+
+args:
+  mode:
+    required: false
+    default: full
+    description: "full (handoff + reflect + docs-reflect) | quick (handoff only)"
+
+phases:
+  - id: memory-scan
+    description: Check MEMORY.md for profile/rules/reference drift
+    steps:
+      - read: MEMORY.md
+      - description: "Note any stale entries — profile changes, new rules, new reference links"
+      - description: "Do not edit MEMORY.md yet — findings feed the handoff content"
+    output: "{ memory_notes: [...] }"
+
+  - id: handoff-draft
+    depends: [memory-scan]
+    when: "session has substantive work — decisions made, files changed, or memory updated"
+    description: Build proposed handoff content from session context + git + memory
+    steps:
+      - run: "git status --short; git log --oneline -5"
+      - description: |
+          Assemble handoff.md content:
+            ## Last session: YYYY-MM-DD
+            ### What was done
+            ### Where we stopped
+            ### What's next (with model recommendation)
+            ### Uncommitted changes (or clean tree)
+            ### Session decisions
+      - description: "Keep it 20–30 lines maximum — concise handoff, not a transcript"
+    output: "{ handoff_content }"
+    verify: "content has all five sections and is ≤30 lines"
+
+  - id: handoff-confirm
+    depends: [handoff-draft]
+    when: "handoff_content is not empty"
+    description: Show handoff to user and wait for confirmation before writing
+    steps:
+      - description: "Print the full proposed handoff_content to user"
+      - description: "Ask: Save to workstreams/handoff.md? (ok / edit / cancel)"
+    verify: "user said ok/save/yes — pass. user said edit/revise — retry. user said cancel/skip — abort."
+    retry_from: handoff-draft
+
+  - id: handoff-write
+    depends: [handoff-confirm]
+    when: "user confirmed handoff"
+    description: Write workstreams/handoff.md
+    steps:
+      - description: "Write confirmed handoff_content to $MEM_DIR/workstreams/handoff.md"
+
+  - id: reflect-cascade
+    depends: [memory-scan]
+    when: "mode != 'quick'"
+    description: Delegate to /reflect — session analysis → backlog
+    steps:
+      - skill: reflect
+        args: "--mode=cascade"
+    output: "{ new_items: N }"
+
+  - id: docs-scan
+    depends: [memory-scan]
+    description: Count DOC notes accumulated this session
+    steps:
+      - run: "node \"$MEM\" --dir=\"$MEM_DIR\" docs | grep -c '^DOC:' || echo 0"
+    output: "{ docs_count: N }"
+
+  - id: docs-cascade
+    depends: [docs-scan]
+    when: "docs_count > 0"
+    description: Delegate to /docs-reflect — session knowledge → repo documentation
+    steps:
+      - skill: docs-reflect
+        args: "--mode=cascade"
+    output: "{ docs_result: done }"
+
+  - id: session-marker
+    depends: [handoff-write, reflect-cascade, docs-cascade]
+    description: Mark session end in memory
+    steps:
+      - run: "node \"$MEM\" --dir=\"$MEM_DIR\" note \"SESSION_END branch:$(git branch --show-current)\""
+
+  - id: report
+    depends: [session-marker]
+    description: Final report to user
+    steps:
+      - description: |
+          Print:
+            Session complete:
+              ✓ Handoff saved to workstreams/handoff.md
+              ✓ Reflect: {new_items} items → backlog
+              ✓ Docs: {docs_count} rules → .claude/rules/  (or: no DOC notes)
+
+            On next start — /session-start picks up the context.

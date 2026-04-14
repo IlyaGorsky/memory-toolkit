@@ -804,6 +804,72 @@ describe('e2e: isolated sandbox', () => {
         assert.ok(e.stderr.includes('verify'), 'should report missing verify gates');
       }
     });
+
+    it('validate-pipeline detects retry_from pointing to missing phase', () => {
+      const badYaml = path.join(sandbox, 'bad-retry-from.yaml');
+      fs.writeFileSync(badYaml, [
+        'name: bad',
+        'phases:',
+        '  - id: only',
+        '    description: only phase',
+        '    steps:',
+        '      - description: step',
+        '    verify: gate',
+        '    retry_from: nonexistent',
+      ].join('\n'));
+      try {
+        execSync(
+          `node "${path.join(PLUGIN_ROOT, 'scripts', 'validate-pipeline.js')}" "${badYaml}"`,
+          { encoding: 'utf8', timeout: 5000 }
+        );
+        assert.fail('should have exited with error');
+      } catch (e) {
+        assert.ok(
+          (e.stderr || '').includes('retry_from'),
+          'should report bad retry_from'
+        );
+      }
+    });
+
+    it('validate-pipeline rejects retry_from without verify', () => {
+      const badYaml = path.join(sandbox, 'retry-without-verify.yaml');
+      fs.writeFileSync(badYaml, [
+        'name: bad',
+        'phases:',
+        '  - id: a',
+        '    description: a',
+        '    steps:',
+        '      - description: step',
+        '    verify: ok',
+        '  - id: b',
+        '    description: b',
+        '    depends: [a]',
+        '    steps:',
+        '      - description: step',
+        '    retry_from: a',
+      ].join('\n'));
+      try {
+        execSync(
+          `node "${path.join(PLUGIN_ROOT, 'scripts', 'validate-pipeline.js')}" "${badYaml}"`,
+          { encoding: 'utf8', timeout: 5000 }
+        );
+        assert.fail('should have exited with error');
+      } catch (e) {
+        assert.ok(
+          (e.stderr || '').includes('retry_from requires'),
+          'should report retry_from without verify'
+        );
+      }
+    });
+
+    it('validate-pipeline accepts directory argument', () => {
+      const templatesDir = path.join(PLUGIN_ROOT, 'skills', 'task-template', 'templates');
+      const result = execSync(
+        `node "${path.join(PLUGIN_ROOT, 'scripts', 'validate-pipeline.js')}" "${templatesDir}"`,
+        { encoding: 'utf8', timeout: 5000 }
+      );
+      assert.ok(result.includes('valid'), 'directory arg should expand to all yamls');
+    });
   });
 
   // --- Version consistency ---

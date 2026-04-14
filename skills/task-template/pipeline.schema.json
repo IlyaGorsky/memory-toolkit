@@ -15,6 +15,11 @@
       "type": "string",
       "description": "What this pipeline does"
     },
+    "args": {
+      "type": "object",
+      "description": "Pipeline-level input arguments — declared names, requirement, description",
+      "additionalProperties": { "$ref": "#/$defs/arg" }
+    },
     "phases": {
       "type": "array",
       "minItems": 1,
@@ -22,6 +27,23 @@
     }
   },
   "$defs": {
+    "arg": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "type": "boolean",
+          "description": "Whether the argument is required"
+        },
+        "description": {
+          "type": "string",
+          "description": "What the argument represents"
+        },
+        "default": {
+          "description": "Default value if not provided"
+        }
+      }
+    },
     "phase": {
       "type": "object",
       "required": ["id", "description", "steps"],
@@ -54,6 +76,14 @@
         "verify": {
           "type": "string",
           "description": "Gate condition — must pass before dependents can run"
+        },
+        "when": {
+          "type": "string",
+          "description": "Condition for running the phase. If false — phase is skipped (dependents still run, using empty/none as output). Evaluated by orchestrator against prior phase outputs."
+        },
+        "retry_from": {
+          "type": "string",
+          "description": "Phase id to jump back to when verify indicates rework (vs abort). Orchestrator distinguishes retry intent (user wants to revise) from fail intent (user cancels) — first loops, second stops the pipeline."
         },
         "for_each": {
           "type": "string",

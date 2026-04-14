@@ -23,10 +23,29 @@ Read: ${CLAUDE_PLUGIN_ROOT}/skills/task-template/templates/<name>.yaml
 3. **Execute phases in order:**
    - Phases with no `depends` → run first (parallel if multiple)
    - Phase with `depends: [X, Y]` → only after X and Y complete
-4. **After each phase** — if `verify` exists, check the condition
-   - If verify fails → stop, report to user, do NOT proceed
+4. **Before each phase** — if `when` exists, evaluate against prior phase outputs and pipeline args
+   - If `when` is false → skip phase, mark output as empty/none
+   - Skip does NOT propagate. Dependents still run (they see empty output from skipped deps). If a dependent must not run without upstream content, it uses its own `when:` to check.
+   - If `when` is true or absent → run the phase
+5. **After each phase** — if `verify` exists, check the condition
    - If verify passes → continue to next phase
-5. **Output** — each phase produces `output` that downstream phases can reference
+   - If verify fails with retry intent AND phase has `retry_from: X` → restart from phase X, re-run it and everything downstream
+   - If verify fails with abort intent (or no `retry_from`) → stop, report to user, do NOT proceed
+6. **Output** — each phase produces `output` that downstream phases can reference
+
+## Pipeline schema
+
+```yaml
+name: pipeline-name        # matches template filename
+description: what it does
+args:                      # optional — pipeline-level inputs
+  mode:
+    required: false
+    default: full
+    description: "..."
+phases:
+  - ...
+```
 
 ## Phase schema
 
@@ -34,10 +53,12 @@ Read: ${CLAUDE_PLUGIN_ROOT}/skills/task-template/templates/<name>.yaml
 - id: phase-name           # unique identifier
   description: what        # shown to user in plan
   depends: [other-phase]   # optional, default: none
+  when: "..."              # optional — skip phase if condition false (dependents still run)
   steps:                   # what to do (free-form instructions or skill calls)
     - description: "..."
   output: "..."            # what this phase produces
   verify: "..."            # optional gate — condition to check before proceeding
+  retry_from: phase-id     # optional — loop back here when verify fails with retry intent
 ```
 
 ## Format for user

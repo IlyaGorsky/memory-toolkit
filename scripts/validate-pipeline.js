@@ -48,6 +48,8 @@ function parseYaml(text) {
         depends: [],
         output: '',
         verify: '',
+        when: '',
+        retry_from: '',
       };
       currentStep = null;
       result.phases.push(currentPhase);
@@ -60,6 +62,8 @@ function parseYaml(text) {
         depends: [],
         output: '',
         verify: '',
+        when: '',
+        retry_from: '',
       };
       currentStep = null;
       result.phases.push(currentPhase);
@@ -79,6 +83,10 @@ function parseYaml(text) {
         currentPhase.output = trimmed.slice(7).trim();
       } else if (trimmed.startsWith('verify:')) {
         currentPhase.verify = trimmed.slice(7).trim();
+      } else if (trimmed.startsWith('when:')) {
+        currentPhase.when = trimmed.slice(5).trim();
+      } else if (trimmed.startsWith('retry_from:')) {
+        currentPhase.retry_from = trimmed.slice(11).trim();
       } else if (trimmed === 'steps:') {
         // steps block
       }
@@ -152,6 +160,19 @@ function validate(filePath) {
         errors.push(`${basename} → ${phase.id}: depends on itself`);
       }
     }
+    // retry_from must reference an existing phase (and not self)
+    if (phase.retry_from) {
+      if (!ids.has(phase.retry_from)) {
+        errors.push(`${basename} → ${phase.id}: retry_from "${phase.retry_from}" does not exist`);
+      }
+      if (phase.retry_from === phase.id) {
+        errors.push(`${basename} → ${phase.id}: retry_from points to itself`);
+      }
+      // retry_from only makes sense paired with verify
+      if (!phase.verify) {
+        errors.push(`${basename} → ${phase.id}: retry_from requires a "verify" gate`);
+      }
+    }
   }
 
   // 2b. Cycle detection (DFS)
@@ -216,7 +237,23 @@ if (args.includes('--all') || args.length === 0) {
     process.exit(1);
   }
 } else {
-  files = args.map(f => path.resolve(f));
+  // Expand directory args to all yaml files inside
+  for (const arg of args) {
+    const resolved = path.resolve(arg);
+    if (!fs.existsSync(resolved)) {
+      console.error(`Not found: ${resolved}`);
+      process.exit(1);
+    }
+    const stat = fs.statSync(resolved);
+    if (stat.isDirectory()) {
+      const yamls = fs.readdirSync(resolved)
+        .filter(f => f.endsWith('.yaml') || f.endsWith('.yml'))
+        .map(f => path.join(resolved, f));
+      files.push(...yamls);
+    } else {
+      files.push(resolved);
+    }
+  }
 }
 
 let totalErrors = 0;
