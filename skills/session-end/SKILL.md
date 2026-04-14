@@ -3,6 +3,8 @@ name: session-end
 description: Session completion — handoff, reflect, docs-reflect cascade.
 user-invocable: true
 argument-hint: ""
+metadata:
+  pipeline: true
 ---
 
 # /session-end — Handoff for the next session

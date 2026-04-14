@@ -8,13 +8,18 @@ user-invocable: false
 
 Runs a YAML pipeline. Each phase must complete (and pass `verify` if present) before dependents can start. Phases without dependencies run in parallel.
 
+## Purpose
+
+Pipelines exist as a **guardrail against step-skipping**. Prose in SKILL.md can be skimmed or reinterpreted by the model, leading to missed steps and broken gates. A pipeline makes the structural contract explicit: phases, dependencies, verify gates, conditional skips.
+
 ## How to use
 
-The calling skill provides a template path:
+When a skill is invoked — manually (`/skill-name`) or via a `skill:` step from another pipeline — check its frontmatter for `metadata.pipeline: true`:
 
-```
-Read: ${CLAUDE_PLUGIN_ROOT}/skills/task-template/templates/<name>.yaml
-```
+- **marker present** → load the pipeline by filename convention at `${CLAUDE_PLUGIN_ROOT}/skills/task-template/templates/<skill-name>.yaml` and execute it through this orchestrator's rules. The YAML is the contract: no phase skipping, no gate bypass, no ignored `verify`. Prose in SKILL.md provides per-step context but cannot soften the contract.
+- **marker absent** → plain prose skill. Follow SKILL.md directly. No structural enforcement.
+
+Filename convention: skill `session-end` ⇄ template `session-end.yaml`. The marker triggers the lookup; the filename resolves the path.
 
 ## Execution rules
 

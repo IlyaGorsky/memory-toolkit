@@ -611,21 +611,23 @@ describe('e2e: isolated sandbox', () => {
     });
 
     it('session-start has task-card phase as pipeline gate', () => {
-      const content = readSkill('session-start');
-      assert.ok(
-        content.includes('task-card phase'),
-        'session-start should have a task-card phase'
+      const yaml = fs.readFileSync(
+        path.join(PLUGIN_ROOT, 'skills', 'task-template', 'templates', 'session-start.yaml'), 'utf8'
       );
       assert.ok(
-        content.includes('What:') && content.includes('Workstream:'),
-        'task card should have What and Workstream fields'
+        yaml.includes('id: task-card'),
+        'session-start.yaml should declare a task-card phase'
       );
       assert.ok(
-        content.includes('Do NOT ask the user to fill in fields manually'),
+        yaml.includes('What') && yaml.includes('Workstream'),
+        'task card phase should reference What and Workstream fields'
+      );
+      assert.ok(
+        yaml.includes('do NOT ask user to fill fields'),
         'task card must auto-fill, not ask user to fill a form'
       );
       assert.ok(
-        content.includes('Start? Or adjust?'),
+        yaml.includes('Start? Or adjust?'),
         'task card must confirm before starting work'
       );
     });

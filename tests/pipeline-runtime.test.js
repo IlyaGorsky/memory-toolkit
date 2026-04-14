@@ -99,4 +99,86 @@ describe('runtime: orchestrator plan formation', { skip: !SHOULD_RUN && 'set RUN
       `output should name handoff-draft as retry target. Output:\n${output}`
     );
   });
+
+  // --- Convention: skill invocation → pipeline pickup via metadata marker + filename ---
+
+  it('convention: /session-end invocation picks up pipeline via marker + filename', () => {
+    const prompt = [
+      'The user just typed: /session-end',
+      '',
+      'Check the frontmatter of skills/session-end/SKILL.md.',
+      'If metadata.pipeline is set, you must load the pipeline by filename convention',
+      'at skills/task-template/templates/session-end.yaml and follow the task-template',
+      'orchestrator contract (skills/task-template/SKILL.md).',
+      '',
+      'Output ONLY the execution plan the orchestrator produces.',
+      'Do not execute any phase. Do not ask for confirmation.',
+      'Plan must list every phase by id.',
+    ].join('\n');
+
+    const output = runClaude(prompt);
+
+    const expectedPhases = [
+      'memory-scan',
+      'handoff-draft',
+      'handoff-confirm',
+      'handoff-write',
+      'reflect-cascade',
+      'docs-scan',
+      'docs-cascade',
+      'session-marker',
+      'report',
+    ];
+
+    for (const phase of expectedPhases) {
+      assert.ok(
+        output.includes(phase),
+        `plan should reference phase "${phase}" (picked up via convention). Output:\n${output}`
+      );
+    }
+  });
+
+  it('convention: /session-start invocation picks up pipeline via marker + filename', () => {
+    const prompt = [
+      'The user just typed: /session-start',
+      '',
+      'Check skills/session-start/SKILL.md frontmatter. If metadata.pipeline is set,',
+      'load skills/task-template/templates/session-start.yaml via the task-template',
+      'orchestrator (skills/task-template/SKILL.md).',
+      '',
+      'Output ONLY the execution plan. Do not execute. Do not ask for confirmation.',
+      'Plan must list every phase by id.',
+    ].join('\n');
+
+    const output = runClaude(prompt);
+
+    const expectedPhases = ['context', 'git', 'workstream-detail', 'candidates', 'task-card', 'work'];
+
+    for (const phase of expectedPhases) {
+      assert.ok(
+        output.includes(phase),
+        `plan should reference phase "${phase}". Output:\n${output}`
+      );
+    }
+  });
+
+  it('convention: skill without metadata.pipeline falls back to prose', () => {
+    const prompt = [
+      'The user just typed: /park',
+      '',
+      'Check skills/park/SKILL.md frontmatter. Does metadata.pipeline exist?',
+      'Answer in one word: YES or NO. Then on next line, state: "follows prose" or "follows pipeline".',
+    ].join('\n');
+
+    const output = runClaude(prompt);
+
+    assert.ok(
+      /\bNO\b/i.test(output),
+      `park has no metadata.pipeline — expected NO. Output:\n${output}`
+    );
+    assert.ok(
+      /follows prose/i.test(output),
+      `park falls back to prose. Output:\n${output}`
+    );
+  });
 });
