@@ -66,22 +66,39 @@ phases:
   retry_from: phase-id     # optional — loop back here when verify fails with retry intent
 ```
 
-## Format for user
+## Visible markers (MUST)
 
-Before executing, show the plan:
+Pipeline execution MUST be visible to the user. Two markers, both mandatory:
+
+**1. Plan banner — printed ONCE before any phase runs:**
 
 ```
 Pipeline: <template-name>
 
-[parallel]
+[first]
   1. phase-a — description
   2. phase-b — description
 
 [after 1,2]
   3. phase-c — description ✓ verify: <condition>
-
-[after 3]
-  4. phase-d — description
 ```
 
-Do NOT ask for confirmation — the calling skill already confirmed.
+**2. Phase announce — printed BEFORE each phase starts executing:**
+
+```
+→ [phase-id] description
+```
+
+If a phase is skipped via `when: false`:
+
+```
+⊘ [phase-id] skipped (when: <condition> is false)
+```
+
+If a phase loops via `retry_from`:
+
+```
+↻ [phase-id] retry → jumping back to <retry_from target>
+```
+
+Do NOT ask for confirmation of the plan — the calling skill already confirmed. But DO always print the plan banner and the per-phase announce. Silent execution defeats the purpose of the pipeline.

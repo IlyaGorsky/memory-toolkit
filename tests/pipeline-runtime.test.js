@@ -162,6 +162,47 @@ describe('runtime: orchestrator plan formation', { skip: !SHOULD_RUN && 'set RUN
     }
   });
 
+  it('visible markers: plan banner printed before execution', () => {
+    const prompt = [
+      'The user just typed: /session-end quick',
+      '',
+      'Check skills/session-end/SKILL.md frontmatter for metadata.pipeline.',
+      'If set, follow the task-template orchestrator contract at',
+      'skills/task-template/SKILL.md — including MANDATORY visible markers.',
+      '',
+      'Output ONLY the plan banner as described in "Visible markers" section.',
+      'Do not execute any phase. Do not ask for confirmation.',
+    ].join('\n');
+
+    const output = runClaude(prompt);
+
+    assert.ok(
+      /Pipeline:\s*session-end/i.test(output),
+      `plan banner must start with "Pipeline: session-end". Output:\n${output}`
+    );
+    assert.ok(
+      /\[first\]|\[after/i.test(output),
+      `plan must use [first]/[after] phase ordering markers. Output:\n${output}`
+    );
+  });
+
+  it('visible markers: phase announce uses → [phase-id] format', () => {
+    const prompt = [
+      'Following the task-template orchestrator contract (skills/task-template/SKILL.md),',
+      'simulate entering the first phase of skills/task-template/templates/session-end.yaml.',
+      '',
+      'Output ONLY the per-phase announce line for the first phase (memory-scan).',
+      'Use the exact format from "Visible markers" section. One line only.',
+    ].join('\n');
+
+    const output = runClaude(prompt);
+
+    assert.ok(
+      /→\s*\[memory-scan\]/.test(output),
+      `announce must be "→ [memory-scan] ...". Output:\n${output}`
+    );
+  });
+
   it('convention: skill without metadata.pipeline falls back to prose', () => {
     const prompt = [
       'The user just typed: /park',
