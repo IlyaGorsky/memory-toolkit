@@ -15,6 +15,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 const { loadSchema, calculateWeight, incrementHits, rebuildIndex } = require('./lib/weight');
 const log = require('./lib/log');
 
@@ -677,6 +678,73 @@ function classify(...args) {
     console.log(JSON.stringify(classifyItems(items), null, 2));
 }
 
+// --- Session activity ---
+
+function sessionActivity() {
+    const today = new Date().toISOString().slice(0, 10);
+    const notePath = path.join(MEMORY_DIR, 'notes', `${today}.md`);
+    const result = { session_start: null, items: [], docs: [] };
+
+    if (!fs.existsSync(notePath)) return result;
+
+    const lines = fs.readFileSync(notePath, 'utf-8').split('\n');
+    const START = /^- (\d{2}:\d{2}) SESSION_START/;
+    const MARKER = /^- \d{2}:\d{2} (SESSION_START|SESSION_END|NEW_WORKSTREAM)/;
+    const LINE = /^- (\d{2}:\d{2}) (.+)$/;
+
+    let boundaryIdx = -1;
+    for (let i = lines.length - 1; i >= 0; i--) {
+        const m = lines[i].match(START);
+        if (m) { boundaryIdx = i; result.session_start = m[1]; break; }
+    }
+
+    for (let i = boundaryIdx + 1; i < lines.length; i++) {
+        if (MARKER.test(lines[i])) continue;
+        const m = lines[i].match(LINE);
+        if (!m) continue;
+        const text = m[2].trim();
+        if (!text) continue;
+        result.items.push(text);
+        if (text.startsWith('DOC:')) result.docs.push(text);
+    }
+
+    return result;
+}
+
+function printSessionActivity() {
+    console.log(JSON.stringify(sessionActivity(), null, 2));
+}
+
+function sessionChanges() {
+    const activity = sessionActivity();
+    const cwd = process.cwd();
+    const result = { since: activity.session_start, files: [], commits: [] };
+    const git = cmd => {
+        try { return execSync(cmd, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+        catch { return ''; }
+    };
+
+    if (activity.session_start) {
+        const since = activity.session_start;
+        const commits = git(`git log --since="${since}" --pretty=format:"%h %s"`);
+        if (commits) result.commits = commits.split('\n').filter(Boolean);
+        const commitFiles = git(`git log --since="${since}" --name-only --pretty=format:""`);
+        const fromCommits = commitFiles.split('\n').filter(Boolean);
+        const status = git('git status --porcelain');
+        const uncommitted = status.split('\n').filter(Boolean).map(l => l.slice(3));
+        result.files = [...new Set([...fromCommits, ...uncommitted])].sort();
+    } else {
+        const status = git('git status --porcelain');
+        result.files = status.split('\n').filter(Boolean).map(l => l.slice(3)).sort();
+    }
+
+    return result;
+}
+
+function printSessionChanges() {
+    console.log(JSON.stringify(sessionChanges(), null, 2));
+}
+
 // --- Router ---
 
 const commands = {
@@ -691,6 +759,8 @@ const commands = {
     workstreams: listWorkstreams,
     docs: printDocs,
     classify,
+    'session-activity': printSessionActivity,
+    'session-changes': printSessionChanges,
     recurring: printRecurring,
     reindex,
     health,
@@ -715,6 +785,8 @@ if (require.main === module) {
         console.log('  note <text>            — quick note');
         console.log('  docs                   — collect DOC: notes');
         console.log('  classify --items=<f>   — classify items by workstream keywords (JSON in/out)');
+        console.log('  session-activity       — current session items since last SESSION_START (JSON)');
+        console.log('  session-changes        — git files+commits since session start (JSON)');
         console.log('  recurring              — find recurring feedback patterns');
         console.log('  reindex                — rebuild MEMORY.md index sorted by weight');
         console.log('  health                 — check memory health (dead links, stale, size, dupes)');
@@ -740,6 +812,8 @@ module.exports = {
     note,
     queryDocs,
     classifyItems,
+    sessionActivity,
+    sessionChanges,
     queryRecurring,
     health,
 };

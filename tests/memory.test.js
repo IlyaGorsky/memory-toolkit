@@ -152,6 +152,161 @@ describe('memory.js', () => {
     });
   });
 
+  describe('session-activity', () => {
+    const today = new Date().toISOString().slice(0, 10);
+
+    function writeNote(content) {
+      writeFile(`notes/${today}.md`, content);
+    }
+
+    it('returns empty result when no notes file', () => {
+      const out = JSON.parse(run('session-activity'));
+      assert.equal(out.session_start, null);
+      assert.deepEqual(out.items, []);
+      assert.deepEqual(out.docs, []);
+    });
+
+    it('collects items after last SESSION_START', () => {
+      writeNote([
+        '- 09:00 SESSION_START uuid:old branch:main',
+        '- 09:15 old session note',
+        '- 10:00 SESSION_START uuid:new branch:main',
+        '- 10:05 current note one',
+        '- 10:10 current note two',
+      ].join('\n'));
+
+      const out = JSON.parse(run('session-activity'));
+
+      assert.equal(out.session_start, '10:00');
+      assert.deepEqual(out.items, ['current note one', 'current note two']);
+    });
+
+    it('separates DOC: items into docs field', () => {
+      writeNote([
+        '- 10:00 SESSION_START uuid:x branch:main',
+        '- 10:05 regular note',
+        '- 10:10 DOC: testing — hit real DB',
+      ].join('\n'));
+
+      const out = JSON.parse(run('session-activity'));
+
+      assert.deepEqual(out.items, ['regular note', 'DOC: testing — hit real DB']);
+      assert.deepEqual(out.docs, ['DOC: testing — hit real DB']);
+    });
+
+    it('skips SESSION_END and NEW_WORKSTREAM markers within session', () => {
+      writeNote([
+        '- 10:00 SESSION_START uuid:x branch:main',
+        '- 10:05 real note',
+        '- 10:06 NEW_WORKSTREAM foo',
+        '- 10:10 another note',
+        '- 10:15 SESSION_END',
+      ].join('\n'));
+
+      const out = JSON.parse(run('session-activity'));
+
+      assert.deepEqual(out.items, ['real note', 'another note']);
+    });
+
+    it('returns empty items when SESSION_START is last line', () => {
+      writeNote('- 10:00 SESSION_START uuid:x branch:main');
+
+      const out = JSON.parse(run('session-activity'));
+
+      assert.equal(out.session_start, '10:00');
+      assert.deepEqual(out.items, []);
+    });
+
+    it('collects everything when no SESSION_START present', () => {
+      writeNote([
+        '# 2026-04-15',
+        '',
+        '- 10:05 orphan note one',
+        '- 10:10 orphan note two',
+      ].join('\n'));
+
+      const out = JSON.parse(run('session-activity'));
+
+      assert.equal(out.session_start, null);
+      assert.deepEqual(out.items, ['orphan note one', 'orphan note two']);
+    });
+  });
+
+  describe('session-changes', () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const REPO = path.join(__dirname, '.tmp-repo');
+
+    function gitInRepo(cmd) {
+      return execSync(`git ${cmd}`, { cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    }
+    function runInRepo(args) {
+      return execSync(`node "${SCRIPT}" --dir="${TMP}" ${args}`, {
+        cwd: REPO, encoding: 'utf8', timeout: 5000,
+      }).trim();
+    }
+    function writeNote(content) {
+      writeFile(`notes/${today}.md`, content);
+    }
+
+    beforeEach(() => {
+      fs.mkdirSync(REPO, { recursive: true });
+      gitInRepo('init -q -b main');
+      gitInRepo('config user.email test@test');
+      gitInRepo('config user.name Test');
+      fs.writeFileSync(path.join(REPO, 'seed.txt'), 'seed\n');
+      gitInRepo('add .');
+      gitInRepo('commit -q -m "seed"');
+    });
+
+    afterEach(() => {
+      fs.rmSync(REPO, { recursive: true, force: true });
+    });
+
+    it('returns uncommitted files when no SESSION_START', () => {
+      fs.writeFileSync(path.join(REPO, 'dirty.txt'), 'x');
+
+      const out = JSON.parse(runInRepo('session-changes'));
+
+      assert.equal(out.since, null);
+      assert.ok(out.files.includes('dirty.txt'));
+      assert.deepEqual(out.commits, []);
+    });
+
+    it('collects commits and files since SESSION_START', () => {
+      const now = new Date();
+      const hhmm = `${String(Math.max(0, now.getHours() - 1)).padStart(2, '0')}:00`;
+      writeNote(`- ${hhmm} SESSION_START uuid:x branch:main`);
+
+      fs.writeFileSync(path.join(REPO, 'a.txt'), 'a');
+      gitInRepo('add .');
+      gitInRepo('commit -q -m "add a"');
+      fs.writeFileSync(path.join(REPO, 'b.txt'), 'b');
+
+      const out = JSON.parse(runInRepo('session-changes'));
+
+      assert.equal(out.since, hhmm);
+      assert.ok(out.commits.some(c => c.includes('add a')));
+      assert.ok(out.files.includes('a.txt'));
+      assert.ok(out.files.includes('b.txt'));
+    });
+
+    it('deduplicates files appearing in both commits and uncommitted', () => {
+      const now = new Date();
+      const hhmm = `${String(Math.max(0, now.getHours() - 1)).padStart(2, '0')}:00`;
+      writeNote(`- ${hhmm} SESSION_START uuid:x branch:main`);
+
+      fs.writeFileSync(path.join(REPO, 'shared.txt'), 'v1');
+      gitInRepo('add .');
+      gitInRepo('commit -q -m "add shared"');
+      fs.writeFileSync(path.join(REPO, 'shared.txt'), 'v2');
+
+      const out = JSON.parse(runInRepo('session-changes'));
+
+      const shared = out.files.filter(f => f === 'shared.txt');
+      assert.equal(shared.length, 1);
+    });
+  });
+
   describe('list', () => {
     it('lists all memory files', () => {
       writeFile('feedback/a.md', '---\nname: a\ntype: feedback\n---\nContent A');
