@@ -138,6 +138,61 @@ node "$MEM" --dir="$MEM_DIR" list <type>
 node "$MEM" --dir="$MEM_DIR" note "<text>"
 ```
 
+### handoff [<workstream>]
+```bash
+node "$MEM" --dir="$MEM_DIR" handoff              # global handoff
+node "$MEM" --dir="$MEM_DIR" handoff <workstream> # per-ws (falls back to global)
+```
+Prints `NO_HANDOFF` when neither per-workstream nor global file exists.
+
+### write-handoff --workstream=<name> --content=<file>
+```bash
+node "$MEM" --dir="$MEM_DIR" write-handoff --workstream=<name> --content=<path>
+```
+Atomic write to `workstreams/<name>/handoff.md`. Frontmatter auto-added.
+
+### classify --items=<json>
+```bash
+node "$MEM" --dir="$MEM_DIR" classify --items=<path-to-json>
+```
+Keyword-routes items by `workstreams.json`. Multi-label, case-insensitive. Unmatched → `_unassigned`.
+
+### session-activity
+```bash
+node "$MEM" --dir="$MEM_DIR" session-activity
+```
+Current session's items (and DOC: subset) since last `SESSION_START` marker in today's notes. JSON output.
+
+### session-changes
+```bash
+node "$MEM" --dir="$MEM_DIR" session-changes
+```
+Git commits + files union since session start. JSON output. Pipe with `session-activity` into `classify` for routing analysis (see `/session-end` Phase 1b).
+
+### docs
+```bash
+node "$MEM" --dir="$MEM_DIR" docs
+```
+Collect `DOC:` notes from daily notes for `/docs-reflect`.
+
+### recurring
+```bash
+node "$MEM" --dir="$MEM_DIR" recurring
+```
+Find recurring feedback patterns.
+
+### reindex
+```bash
+node "$MEM" --dir="$MEM_DIR" reindex
+```
+Rebuild MEMORY.md index sorted by weight.
+
+### health
+```bash
+node "$MEM" --dir="$MEM_DIR" health
+```
+Check for dead links, stale entries, size overflow, duplicates.
+
 ---
 
 ## Rules

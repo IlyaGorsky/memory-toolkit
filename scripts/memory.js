@@ -4,13 +4,25 @@
  * Memory API — on-demand context loading from memory/
  *
  * Usage:
- *   node memory.js search <query>       — search across all files
- *   node memory.js recent [n]           — last N feedback files (default: 5)
- *   node memory.js workstream <name>    — all files related to a workstream
- *   node memory.js decisions [topic]    — decisions (Why/How to apply blocks)
- *   node memory.js list [type]          — list files (workstreams|feedback|decisions|profile|reference|notes|all)
- *   node memory.js docs                 — collect DOC: notes from daily notes
- *   node memory.js reindex              — rebuild MEMORY.md index sorted by weight (evicts low-weight entries if over 200 lines)
+ *   node memory.js search <query>                                    — search across all files
+ *   node memory.js recent [n]                                        — last N feedback files (default: 5)
+ *   node memory.js workstream <name>                                 — all files related to a workstream
+ *   node memory.js workstreams                                       — list workstreams with per-ws handoff dates
+ *   node memory.js add-workstream <name> <keywords...>               — create/update workstream
+ *   node memory.js remove-workstream <name>                          — remove workstream
+ *   node memory.js decisions [topic]                                 — decisions (Why/How to apply blocks)
+ *   node memory.js list [type]                                       — list files (workstreams|feedback|decisions|profile|reference|notes|all)
+ *   node memory.js note <text>                                       — daily note (SESSION_* markers auto-routed to sessions.log)
+ *   node memory.js docs                                              — collect DOC: notes from daily notes
+ *   node memory.js recurring                                         — recurring feedback patterns
+ *   node memory.js reindex                                           — rebuild MEMORY.md index sorted by weight
+ *   node memory.js health                                            — dead links, stale, size, dupes
+ *   node memory.js classify --items=<json>                           — keyword-route items by workstreams.json (multi-label, JSON in/out)
+ *   node memory.js session-activity                                  — current session items since last SESSION_START (JSON)
+ *   node memory.js session-changes                                   — git commits + files since session start (JSON)
+ *   node memory.js handoff [<workstream>]                            — print per-ws handoff if exists, else global, else NO_HANDOFF
+ *   node memory.js write-handoff --workstream=<name> --content=<f>   — atomic write to workstreams/<name>/handoff.md
+ *   node memory.js dir                                               — memory directory path
  */
 
 const fs = require('fs');
