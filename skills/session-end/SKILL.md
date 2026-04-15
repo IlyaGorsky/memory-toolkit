@@ -20,7 +20,32 @@ Check what is current:
 - Rules — new agreements?
 - Reference — new links?
 
-### 1b: Propose handoff
+### 1b: Routing analysis (preview)
+
+Classify session activity by workstream — preview, not yet written (AP-24).
+
+```bash
+node "$MEM" --dir="$MEM_DIR" session-activity > /tmp/activity.json
+node "$MEM" --dir="$MEM_DIR" session-changes > /tmp/changes.json
+
+# Combine items + file paths + commit subjects into one array for classify
+jq -s '[.[0].items[], .[1].commits[], .[1].files[]]' /tmp/activity.json /tmp/changes.json > /tmp/items.json
+node "$MEM" --dir="$MEM_DIR" classify --items=/tmp/items.json
+```
+
+Show user a compact routing table:
+
+```text
+Routing analysis:
+  lifecycle       → 7 items
+  infrastructure  → 3 items
+  research        → 1 item
+  _unassigned     → 2 items
+
+(preview — handoffs per workstream will be written in step 1d)
+```
+
+### 1c: Propose handoff
 
 **MUST show the proposed handoff content to the user and wait for confirmation before writing.**
 
@@ -52,7 +77,7 @@ type: project
 - <new agreements, if any>
 ```
 
-### 1c: Confirm
+### 1d: Confirm
 
 Show the handoff to user. **Wait for "ok" / "save" before writing.** Then write `workstreams/handoff.md`.
 

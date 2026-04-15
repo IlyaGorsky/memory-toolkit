@@ -706,6 +706,14 @@ describe('e2e: isolated sandbox', () => {
       );
     });
 
+    it('session-end Phase 1 has routing analysis preview (AP-24)', () => {
+      const content = readSkill('session-end');
+      assert.ok(
+        content.includes('Routing analysis') && content.includes('session-activity') && content.includes('classify'),
+        'session-end Phase 1 must run routing analysis on session activity'
+      );
+    });
+
     it('memory-setup fresh path requires confirmation', () => {
       const content = readSkill('memory-setup');
       assert.ok(
