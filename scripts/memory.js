@@ -247,17 +247,26 @@ function printList(type = 'all') {
 
 // --- Note ---
 
+const SESSION_LOG_PREFIXES = ['SESSION_START', 'SESSION_END', 'NEW_WORKSTREAM'];
+
 function note(...words) {
     const text = words.join(' ');
     if (!text) return console.log('Usage: memory.js note <text>\nExample: memory.js note "auth: switched to JWT for stateless sessions"');
 
+    const time = new Date().toTimeString().slice(0, 5);
+    const today = new Date().toISOString().slice(0, 10);
+    const isSessionMarker = SESSION_LOG_PREFIXES.some(p => text.startsWith(p));
+
+    if (isSessionMarker) {
+        const logPath = path.join(MEMORY_DIR, 'sessions.log');
+        fs.appendFileSync(logPath, `${today} ${time} ${text}\n`);
+        return console.log(`Logged to sessions.log`);
+    }
+
     const notesDir = DIRS.notes;
     if (!fs.existsSync(notesDir)) fs.mkdirSync(notesDir, { recursive: true });
 
-    const today = new Date().toISOString().slice(0, 10);
     const filePath = path.join(notesDir, `${today}.md`);
-
-    const time = new Date().toTimeString().slice(0, 5);
     const entry = `- ${time} ${text}\n`;
 
     if (fs.existsSync(filePath)) {
@@ -440,12 +449,25 @@ function listWorkstreams() {
     const entries = Object.entries(data);
     if (!entries.length) return console.log('No workstreams configured.');
 
-    console.log('\nWorkstreams:\n');
-    entries.forEach(([name, keywords], i) => {
+    const schema = loadSchema(MEMORY_DIR);
+    const weightConfig = schema.weight || {};
+
+    const enriched = entries.map(([name, keywords]) => {
         const files = queryWorkstream(name);
-        const handoff = files.find(f => f.name.includes('handoff'));
+        const lastTouched = files.length ? files[0].mtime : null;
+        const handoff = files.find(f => f.name === 'workstreams/handoff.md');
+        const weights = files.map(f => calculateWeight(f, weightConfig)).sort((a, b) => b - a);
+        const score = weights.slice(0, 5).reduce((sum, w) => sum + w, 0);
+        return { name, keywords, files, lastTouched, handoff, score };
+    });
+
+    enriched.sort((a, b) => b.score - a.score);
+
+    console.log('\nWorkstreams (sorted by top-5 weight concentration):\n');
+    enriched.forEach(({ name, keywords, files, lastTouched, handoff, score }, i) => {
+        const lastDate = lastTouched ? lastTouched.toISOString().slice(0, 10) : '—';
         const handoffDate = handoff ? handoff.mtime.toISOString().slice(0, 10) : null;
-        console.log(`  ${i + 1}. ${name} — ${files.length} files${handoffDate ? `, handoff: ${handoffDate}` : ''}`);
+        console.log(`  ${i + 1}. ${name} — ${files.length} files, score: ${score.toFixed(1)}, last touched: ${lastDate}${handoffDate ? `, handoff: ${handoffDate}` : ''}`);
         console.log(`     keywords: ${keywords.join(', ')}`);
     });
     console.log(`\n  ➕ Add new: memory.js add-workstream <name> <keywords...>`);

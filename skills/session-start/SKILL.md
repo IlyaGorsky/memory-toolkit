@@ -9,167 +9,163 @@ metadata:
 
 # /session-start — Cold session start
 
-Quick context entry. Gather state, show what's remaining, suggest focus.
+Quick context entry. Gather state, propose focus.
 
 ---
 
-## Step 1: Memory — load context
+## Step 1: Gather context
 
-Read MEMORY.md (context map).
+**Do NOT re-read MEMORY.md** — already in system prompt via claudeMd loader.
 
-If a workstream argument is provided — load details immediately and go to Step 3.
-
-If no argument is provided — resolve paths and show workstreams:
+If a workstream argument is provided — skip to Step 3.
 
 ```bash
 MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
 PROJ_KEY=$(pwd | tr '/.' '-' | sed 's/^-//')
 MEM_DIR="$HOME/.claude/projects/-${PROJ_KEY}/memory"
+
+# Latest handoff (overwritten each session-end)
+[ -f "$MEM_DIR/workstreams/handoff.md" ] && cat "$MEM_DIR/workstreams/handoff.md"
+
+# Latest dated note
+ls -t "$MEM_DIR/notes/"*.md 2>/dev/null | head -1 | xargs -I{} head -30 {}
+
+# Workstreams sorted by aggregate weight
 node "$MEM" --dir="$MEM_DIR" workstreams
+
+# Top-3 brief inline
+for WS in <top-3 from sorted list>; do
+  node "$MEM" --dir="$MEM_DIR" workstream "$WS" --brief | head -15
+done
 ```
 
-Show menu. **REQUIRED format** — list workstreams from the command output, then ALWAYS add the ➕ line as the last numbered item:
+**Decision tree:**
 
-```
-Workstreams:
-  1. <name> — <N> files, handoff from <date>
-  ...
-  N. ➕ Create new workstream
-
-What do we do?
-```
-
-**The ➕ Create new workstream line is MANDATORY. Never omit it.**
-
-Response options:
-- Number or workstream name → load details and go to Step 3
-- "All" / "overview" → show a brief snapshot for each, then focus candidates
-- Last number / "New" / ➕ → Step 1b: create workstream
+| Handoff state | Action |
+|---|---|
+| ≤7 days old, has "What's next" | Skip menu, use handoff as primary candidates |
+| >7 days old | Show as stale context, present menu |
+| Missing/empty/only `SESSION_START` markers | Say "no usable context", suggest `/session-restore`, fall through to menu |
+| No handoff, no notes | Show menu only |
 
 ---
 
-## Step 1b: Create new workstream (if ➕ selected)
+## Step 1b: Workstream menu (fallback)
 
-Ask:
-1. **Name**: "What should the workstream be called?" (e.g. `auth-refactor`, `mobile-fix`)
-2. **Keywords**: "Which keywords to use for finding related files?" (e.g. `auth, login, session, token`)
+Render as table. Top-3 rows show synthesized "What's in" from `--brief`; rest show keywords. ➕ row is mandatory.
 
-Update `workstreams.json`:
+```
+**Workstreams** (sorted by aggregate weight)
 
-```bash
-# Read current, add new, write
-node -e "
-const fs = require('fs');
-const p = '$MEM_DIR/workstreams.json';
-const data = fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf-8')) : {};
-data['{name}'] = [{keywords}];
-fs.writeFileSync(p, JSON.stringify(data, null, 2));
-console.log('Added workstream: {name}');
-"
+| # | Workstream | Last touched | What's in / Keywords |
+|---|---|---|---|
+| 1 | <name> | <date> | <synthesized 1-line for top-3> |
+| ... | | | <keywords for rest> |
+| N | ➕ Create new | | |
 ```
 
-Create directory and initial file:
-
+If user picks ➕ — ask name + keywords, then:
 ```bash
-mkdir -p "$MEM_DIR/workstreams"
+node "$MEM" --dir="$MEM_DIR" add-workstream <name> <keyword1> <keyword2> ...
 ```
-
-Write note:
-
-```bash
-node "$MEM" note "NEW_WORKSTREAM: {name} keywords: {keywords}"
-```
-
-Go to Step 3 with the new workstream.
 
 ---
 
 ## Step 2: Git status
 
 ```bash
-git status
-git log --oneline -5
-git branch --show-current
+git status; git log --oneline -5; git branch --show-current
 ```
 
-If there are uncommitted changes — report and ask: "Commit or continue on top?"
-If the last commit was >5 days ago — note it.
+- Uncommitted changes → ask: "Commit or continue on top?"
+- Last commit >5 days ago → note it
+- **Commits:** synthesize last 2-3 into 1 line about the theme. Don't list verbatim.
+
+**Branch ↔ workstream check:** does branch name contain any keyword from `workstreams.json`?
+
+- Match → skip "Current branch" block in Step 4
+- No match → run `git log <branch> --oneline -10` + `git diff $(git merge-base HEAD origin/main)...HEAD --stat`. Synthesize phase (review iteration / new feature / hotfix). Grep `notes/` for branch name. Surface in Step 4 as branch block + extra focus candidate.
+
+If handoff has `lastCommit` ref: show `git log <ref>..HEAD --oneline` (changes since session-end).
 
 ---
 
-## Step 3: Task plan (brief first)
-
-Load the workstream with `--brief` to save context:
+## Step 3: Workstream brief
 
 ```bash
 node "$MEM" --dir="$MEM_DIR" workstream <name> --brief
 ```
 
-Show only the brief snapshot:
-- How many tasks [ ] / [x]
-- What is blocked
-- What can be picked up now
-
-**Do NOT load full file contents yet.** Full context loads only after the user picks a specific task in Step 4.
+Show: open/done task counts, blockers, pickable now. **Do NOT read full files** — full context loads only after task pick in Step 4.
 
 ---
 
-## Step 4: Focus candidates
+## Step 4: Render & propose
 
-Format:
+**Use the user's preferred language** (from `profile/language.md` if present, else English). Translate labels and prose; keep markdown structure, identifiers, code refs as-is.
+
+**Required format** — clean bold headers, no emoji, `---` between every block, blank line after each header before content.
 
 ```text
 ## Session YYYY-MM-DD
 
-Git: <branch> / clean tree / N uncommitted files
-Last commit: <hash> <message> (<days> days ago)
+**Git:** branch `<branch>` / <N> uncommitted / last commit <days> days ago
+**Commits:** <1-line synthesis>
 
-### Focus candidates
-a. <task> — <SP> — why now
-b. <task> — <SP> — why now
-c. <task> — <SP> — why now
+---
+
+**Workstreams**
+
+[table from Step 1b]
+
+---
+
+**Task plan ({active workstream})**
+
+{1-line context}
+- [ ] {open task} ({SP})
+- [ ] {open task} — {blocker}
+
+---
+
+**Current branch `{branch}`** _(only if no workstream match)_
+
+{1-2 sentences: theme, phase, side task vs portfolio}
+
+---
+
+**Focus candidates**
+
+1. **{task}** — {why now} → **{Model}** ({reason})
+2. **{task}** — {why now} → **{Model}** ({reason})
+3. **{task}** — {why now} → **{Model}** ({reason})
+
+---
+
+My hypothesis: focus on **{candidate #1}** because {reasoning grounded in handoff/git/recency}. Recommendation: **{Model}**.
+
+Agree, or different plan?
 ```
 
----
+**Close with a hypothesis, not a menu.** Users iterate on a proposal faster than they pick from a list. Candidates 2-3 stay visible for quick override.
 
-## Step 5: Model recommendation
-
-For each candidate — suggest a model based on work type:
-
-| Task type | Model | Why |
-| --- | --- | --- |
-| Planning, architecture, new domain | Opus | exploration, reasoning needed |
-| Coding from a ready plan, scaffold | Sonnet | execution by rules |
-| Routine: translations, pattern copying | Haiku | cheap, rules are sufficient |
-| Review, analysis, refactoring | Sonnet/Opus | depends on depth |
-
-Format: after each candidate — `→ recommendation: Sonnet (execution by pattern)`
+**Model selection:** Opus = planning/architecture/exploration. Sonnet = execution by plan, refactoring, review. Haiku = routine/translation/pattern copy.
 
 ---
 
-## Step 6: Ask
-
-"What do we do? Or pick from the candidates? Model ok or switch?"
-
----
-
-## Step 7: Session label
-
-After choosing a focus — write a label:
+## Step 5: Session label
 
 ```bash
 node "$MEM" --dir="$MEM_DIR" note "SESSION_START branch:$(git branch --show-current) workstream:<chosen> focus:<task>"
 ```
 
-This allows `/session-restore search SESSION_START` to find all session entry points.
+(Auto-routed to `sessions.log`, not notes.)
 
 ---
 
 ## Rules
 
-- Do not read entire files — only headers and [ ] tasks
-- Do not suggest more than 3 candidates
-- If there are blocked tasks (waiting for mockups/backend) — note them, do not suggest
-- When a workstream argument is provided — go deeper into context immediately, without a general overview
-- If the previous session ended with compact — check what the last action was via `/session-restore`
-- **Never skip Step 1 workstream menu**, even when startup hook context is available in system prompt. Hook context enriches Step 4 candidates — it does not replace the explicit selection step. The user must choose the workstream, not the assistant.
+- Max 3 focus candidates
+- Skip blocked tasks (waiting on mockups/backend) from candidates — note them separately
+- Workstream argument → go straight to Step 3
+- Previous session ended with compact → check via `/session-restore`

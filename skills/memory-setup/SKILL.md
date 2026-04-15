@@ -58,7 +58,14 @@ Proceed? (yes/skip)
 1. `mkdir -p "$MEM_DIR"`
 2. If no `CLAUDE_PLUGIN_ROOT`: `cp /path/to/memory-toolkit/scripts/memory.js "$MEM_DIR/"`
 3. Ask: "What are the main workstreams in this project?" → create `workstreams.json`
-4. Ask: "Describe your role in 1-2 sentences" → create `profile/role.md`
+4. **Profile interview** → create `profile/user-role.md` (frontmatter `type: user`).
+   Ask sequentially, accept short answers, skip empty:
+   - **Role:** "What's your role and team?" (job title, company, team size)
+   - **Initiative:** "What's the broader initiative or goal you're driving here?"
+   - **Communication style:** "Anything about how you like to work? (pacing, directness, things that annoy you)"
+   - **Domain terminology:** "Any project-specific terms I should know? (e.g. портфель instead of sprint, custom SP units)"
+
+   Write as markdown with `**Section:**` headers, not a single paragraph. This profile gets auto-loaded via MEMORY.md and shapes how the agent communicates with you.
 5. Ask: "What language do you prefer for documentation and rules? (e.g. English, Russian)" → create `profile/language.md`
 6. Ask: "Key links (Jira, Figma, Slack, docs)?" → create `reference/links.md`
 7. Create MEMORY.md from template (see Step 4)
@@ -100,6 +107,7 @@ Proposed changes:
   [ ] Create memory-schema.json (weighted eviction config)
   [ ] Create subdirectories (feedback/, decisions/, etc.)
   [ ] Move files to subdirectories by type
+  [ ] Profile interview → profile/user-role.md (if missing)
 
 Already in place:
   [x] MEMORY.md exists
@@ -193,6 +201,21 @@ After creating workstreams.json, add a Workstreams section to MEMORY.md so they 
 ```
 
 This ensures agents see workstreams without running `memory.js workstreams`.
+
+### 4d-bis: Profile section in MEMORY.md
+
+If `profile/user-role.md` exists (or was just created), ensure MEMORY.md has a `## Profile` section indexing it:
+
+```markdown
+## Profile
+- [User role](profile/user-role.md) — {one-line description from frontmatter}
+```
+
+Place it right after the `## Rules` block — profile is high-signal context, agent should see it early.
+
+### 4d-ter: Profile interview for upgrade path
+
+If path B (upgrade) and `profile/user-role.md` does NOT exist, run the same interview as Step 2A point 4. Skip if user declines.
 
 ### 4e: Create subdirectories and move files
 
