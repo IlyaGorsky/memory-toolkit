@@ -624,6 +624,59 @@ function health() {
     return issues;
 }
 
+// --- Classify ---
+
+function classifyItems(items) {
+    const buckets = {};
+    const unassigned = [];
+    const aliasEntries = Object.entries(WORKSTREAM_ALIASES);
+
+    for (const raw of items) {
+        const item = String(raw);
+        const lower = item.toLowerCase();
+        const hits = [];
+        for (const [ws, keywords] of aliasEntries) {
+            const kws = [].concat(keywords || []);
+            if (kws.some(k => k && lower.includes(String(k).toLowerCase()))) {
+                hits.push(ws);
+            }
+        }
+        if (hits.length === 0) {
+            unassigned.push(item);
+        } else {
+            for (const ws of hits) {
+                if (!buckets[ws]) buckets[ws] = [];
+                buckets[ws].push(item);
+            }
+        }
+    }
+
+    return { ...buckets, _unassigned: unassigned };
+}
+
+function classify(...args) {
+    const itemsArg = args.find(a => a && a.startsWith('--items='));
+    if (!itemsArg) {
+        console.log('Usage: memory.js classify --items=<path-to-json>');
+        console.log('  items.json: array of strings');
+        console.log('  output: JSON { "<workstream>": [items...], "_unassigned": [...] }');
+        return;
+    }
+    const itemsPath = itemsArg.slice('--items='.length);
+    let items;
+    try {
+        items = JSON.parse(fs.readFileSync(itemsPath, 'utf-8'));
+    } catch (e) {
+        console.error(`Failed to read items: ${e.message}`);
+        process.exit(1);
+    }
+    if (!Array.isArray(items)) {
+        console.error('items file must contain a JSON array of strings');
+        process.exit(1);
+    }
+    console.log(JSON.stringify(classifyItems(items), null, 2));
+}
+
 // --- Router ---
 
 const commands = {
@@ -637,6 +690,7 @@ const commands = {
     'remove-workstream': removeWorkstream,
     workstreams: listWorkstreams,
     docs: printDocs,
+    classify,
     recurring: printRecurring,
     reindex,
     health,
@@ -660,6 +714,7 @@ if (require.main === module) {
         console.log('  list [type]            — list files');
         console.log('  note <text>            — quick note');
         console.log('  docs                   — collect DOC: notes');
+        console.log('  classify --items=<f>   — classify items by workstream keywords (JSON in/out)');
         console.log('  recurring              — find recurring feedback patterns');
         console.log('  reindex                — rebuild MEMORY.md index sorted by weight');
         console.log('  health                 — check memory health (dead links, stale, size, dupes)');
@@ -684,6 +739,7 @@ module.exports = {
     DIRS,
     note,
     queryDocs,
+    classifyItems,
     queryRecurring,
     health,
 };

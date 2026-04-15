@@ -78,6 +78,80 @@ describe('memory.js', () => {
     });
   });
 
+  describe('classify', () => {
+    function writeWorkstreams(obj) {
+      fs.writeFileSync(path.join(TMP, 'workstreams.json'), JSON.stringify(obj));
+    }
+    function writeItems(items) {
+      const p = path.join(TMP, 'items.json');
+      fs.writeFileSync(p, JSON.stringify(items));
+      return p;
+    }
+
+    it('routes items to single workstream by keyword match', () => {
+      writeWorkstreams({ lifecycle: ['session-end', 'session-start'], infra: ['memory.js'] });
+      const items = writeItems(['refactor session-end phase 1', 'tweak memory.js router']);
+
+      const out = JSON.parse(run(`classify --items=${items}`));
+
+      assert.deepEqual(out.lifecycle, ['refactor session-end phase 1']);
+      assert.deepEqual(out.infra, ['tweak memory.js router']);
+      assert.deepEqual(out._unassigned, []);
+    });
+
+    it('assigns item to multiple workstreams (multi-label)', () => {
+      writeWorkstreams({ lifecycle: ['session-end'], docs: ['handoff'] });
+      const items = writeItems(['session-end writes handoff per workstream']);
+
+      const out = JSON.parse(run(`classify --items=${items}`));
+
+      assert.deepEqual(out.lifecycle, ['session-end writes handoff per workstream']);
+      assert.deepEqual(out.docs, ['session-end writes handoff per workstream']);
+      assert.deepEqual(out._unassigned, []);
+    });
+
+    it('puts unmatched items in _unassigned', () => {
+      writeWorkstreams({ lifecycle: ['session-end'] });
+      const items = writeItems(['totally unrelated thought']);
+
+      const out = JSON.parse(run(`classify --items=${items}`));
+
+      assert.deepEqual(out._unassigned, ['totally unrelated thought']);
+      assert.ok(!out.lifecycle);
+    });
+
+    it('is case-insensitive', () => {
+      writeWorkstreams({ infra: ['Memory.js'] });
+      const items = writeItems(['update MEMORY.JS router']);
+
+      const out = JSON.parse(run(`classify --items=${items}`));
+
+      assert.deepEqual(out.infra, ['update MEMORY.JS router']);
+    });
+
+    it('handles empty items array', () => {
+      writeWorkstreams({ lifecycle: ['session-end'] });
+      const items = writeItems([]);
+
+      const out = JSON.parse(run(`classify --items=${items}`));
+
+      assert.deepEqual(out, { _unassigned: [] });
+    });
+
+    it('treats all items as unassigned when workstreams.json missing', () => {
+      const items = writeItems(['anything goes here']);
+
+      const out = JSON.parse(run(`classify --items=${items}`));
+
+      assert.deepEqual(out._unassigned, ['anything goes here']);
+    });
+
+    it('shows usage when --items flag missing', () => {
+      const result = run('classify');
+      assert.ok(result.includes('Usage'));
+    });
+  });
+
   describe('list', () => {
     it('lists all memory files', () => {
       writeFile('feedback/a.md', '---\nname: a\ntype: feedback\n---\nContent A');
