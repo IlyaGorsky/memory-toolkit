@@ -232,6 +232,57 @@ describe('memory.js', () => {
     });
   });
 
+  describe('write-handoff', () => {
+    function writeContent(content) {
+      const p = path.join(TMP, 'handoff-content.md');
+      fs.writeFileSync(p, content);
+      return p;
+    }
+
+    it('writes workstreams/<name>/handoff.md with frontmatter auto-added', () => {
+      const contentPath = writeContent('## Last session\n- did X\n');
+
+      const out = run(`write-handoff --workstream=lifecycle --content=${contentPath}`);
+
+      assert.ok(out.includes('workstreams/lifecycle/handoff.md'));
+      const written = fs.readFileSync(path.join(TMP, 'workstreams', 'lifecycle', 'handoff.md'), 'utf8');
+      assert.ok(written.startsWith('---\n'));
+      assert.ok(written.includes('type: project'));
+      assert.ok(written.includes('## Last session'));
+    });
+
+    it('preserves user-provided frontmatter', () => {
+      const contentPath = writeContent('---\nname: custom\ntype: project\n---\n\nbody');
+
+      run(`write-handoff --workstream=research --content=${contentPath}`);
+
+      const written = fs.readFileSync(path.join(TMP, 'workstreams', 'research', 'handoff.md'), 'utf8');
+      assert.ok(written.includes('name: custom'));
+      assert.ok(!written.match(/---[\s\S]*---[\s\S]*---/)); // only one frontmatter block
+    });
+
+    it('overwrites existing handoff', () => {
+      const first = writeContent('first');
+      const second = writeContent('second');
+      run(`write-handoff --workstream=infra --content=${first}`);
+      run(`write-handoff --workstream=infra --content=${second}`);
+
+      const written = fs.readFileSync(path.join(TMP, 'workstreams', 'infra', 'handoff.md'), 'utf8');
+      assert.ok(written.includes('second'));
+      assert.ok(!written.includes('first'));
+    });
+
+    it('rejects invalid workstream names', () => {
+      const contentPath = writeContent('x');
+      assert.throws(() => run(`write-handoff --workstream=../evil --content=${contentPath}`));
+    });
+
+    it('shows usage when flags missing', () => {
+      const result = run('write-handoff');
+      assert.ok(result.includes('Usage'));
+    });
+  });
+
   describe('session-changes', () => {
     const today = new Date().toISOString().slice(0, 10);
     const REPO = path.join(__dirname, '.tmp-repo');

@@ -745,6 +745,36 @@ function printSessionChanges() {
     console.log(JSON.stringify(sessionChanges(), null, 2));
 }
 
+function writeHandoff(...args) {
+    const wsArg = args.find(a => a && a.startsWith('--workstream='));
+    const contentArg = args.find(a => a && a.startsWith('--content='));
+    if (!wsArg || !contentArg) {
+        console.log('Usage: memory.js write-handoff --workstream=<name> --content=<path-to-md>');
+        console.log('  writes to workstreams/<name>/handoff.md');
+        return;
+    }
+    const ws = wsArg.slice('--workstream='.length).trim();
+    const contentPath = contentArg.slice('--content='.length);
+    if (!ws || !/^[a-zA-Z0-9_-]+$/.test(ws)) {
+        console.error(`Invalid workstream name: "${ws}"`);
+        process.exit(1);
+    }
+    let body;
+    try { body = fs.readFileSync(contentPath, 'utf-8'); }
+    catch (e) { console.error(`Failed to read content: ${e.message}`); process.exit(1); }
+
+    const dir = path.join(MEMORY_DIR, 'workstreams', ws);
+    fs.mkdirSync(dir, { recursive: true });
+    const out = path.join(dir, 'handoff.md');
+
+    const hasFrontmatter = body.startsWith('---\n');
+    const final = hasFrontmatter ? body : (
+        `---\nname: ${ws} handoff\ndescription: Per-workstream handoff for ${ws}\ntype: project\n---\n\n${body}`
+    );
+    fs.writeFileSync(out, final.endsWith('\n') ? final : final + '\n');
+    console.log(`Wrote workstreams/${ws}/handoff.md`);
+}
+
 // --- Router ---
 
 const commands = {
@@ -761,6 +791,7 @@ const commands = {
     classify,
     'session-activity': printSessionActivity,
     'session-changes': printSessionChanges,
+    'write-handoff': writeHandoff,
     recurring: printRecurring,
     reindex,
     health,
@@ -787,6 +818,7 @@ if (require.main === module) {
         console.log('  classify --items=<f>   — classify items by workstream keywords (JSON in/out)');
         console.log('  session-activity       — current session items since last SESSION_START (JSON)');
         console.log('  session-changes        — git files+commits since session start (JSON)');
+        console.log('  write-handoff --workstream=<name> --content=<f>  — write workstreams/<name>/handoff.md');
         console.log('  recurring              — find recurring feedback patterns');
         console.log('  reindex                — rebuild MEMORY.md index sorted by weight');
         console.log('  health                 — check memory health (dead links, stale, size, dupes)');
@@ -814,6 +846,7 @@ module.exports = {
     classifyItems,
     sessionActivity,
     sessionChanges,
+    writeHandoff,
     queryRecurring,
     health,
 };

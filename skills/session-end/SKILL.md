@@ -77,9 +77,28 @@ type: project
 - <new agreements, if any>
 ```
 
-### 1d: Confirm
+### 1d: Confirm and write
 
-Show the handoff to user. **Wait for "ok" / "save" before writing.** Then write `workstreams/handoff.md`.
+Show handoff to user. **Wait for "ok" / "save" before writing.**
+
+On confirm, write in two layers:
+
+1. **Per-workstream handoffs** — for each non-empty bucket from routing (excl. `_unassigned`):
+   ```bash
+   # Compose per-workstream slice (relevant What-was-done / What's-next / decisions).
+   # Save to /tmp/<ws>-handoff.md, then:
+   node "$MEM" --dir="$MEM_DIR" write-handoff --workstream=<ws> --content=/tmp/<ws>-handoff.md
+   ```
+
+2. **Global handoff** — write `workstreams/handoff.md` (overall summary + cross-refs):
+   ```markdown
+   ### Per-workstream handoffs
+   - lifecycle  → workstreams/lifecycle/handoff.md
+   - research   → workstreams/research/handoff.md
+   ```
+   Use the Write tool directly for the global file.
+
+If all items land in `_unassigned`, skip per-workstream writes and save only the global handoff.
 
 ## Phase 2: Reflect
 

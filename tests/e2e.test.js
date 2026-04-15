@@ -714,6 +714,14 @@ describe('e2e: isolated sandbox', () => {
       );
     });
 
+    it('session-end Phase 1d writes per-workstream handoffs (AP-24)', () => {
+      const content = readSkill('session-end');
+      assert.ok(
+        content.includes('write-handoff') && content.includes('--workstream=') && content.includes('Per-workstream handoffs'),
+        'session-end Phase 1d must call write-handoff per workstream + write global cross-refs'
+      );
+    });
+
     it('memory-setup fresh path requires confirmation', () => {
       const content = readSkill('memory-setup');
       assert.ok(
