@@ -24,8 +24,8 @@ MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
 PROJ_KEY=$(pwd | tr '/.' '-' | sed 's/^-//')
 MEM_DIR="$HOME/.claude/projects/-${PROJ_KEY}/memory"
 
-# Latest handoff (overwritten each session-end)
-[ -f "$MEM_DIR/workstreams/handoff.md" ] && cat "$MEM_DIR/workstreams/handoff.md"
+# Latest handoff (global; per-workstream fetched in Step 3)
+node "$MEM" --dir="$MEM_DIR" handoff
 
 # Latest dated note
 ls -t "$MEM_DIR/notes/"*.md 2>/dev/null | head -1 | xargs -I{} head -30 {}
@@ -93,6 +93,7 @@ If handoff has `lastCommit` ref: show `git log <ref>..HEAD --oneline` (changes s
 ## Step 3: Workstream brief
 
 ```bash
+node "$MEM" --dir="$MEM_DIR" handoff <name>      # per-workstream handoff if available
 node "$MEM" --dir="$MEM_DIR" workstream <name> --brief
 ```
 
