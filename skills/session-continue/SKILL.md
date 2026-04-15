@@ -17,8 +17,10 @@ Pick up a workstream without a full cold start. For cases when you know what you
 MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
 PROJ_KEY=$(pwd | tr '/.' '-' | sed 's/^-//')
 MEM_DIR="$HOME/.claude/projects/-${PROJ_KEY}/memory"
-cat "$MEM_DIR/workstreams/handoff.md" 2>/dev/null || echo "NO_HANDOFF"
+node "$MEM" --dir="$MEM_DIR" handoff "${1:-}"
 ```
+
+Falls back to global handoff if no per-workstream file exists. Prints `NO_HANDOFF` when neither found.
 
 If no handoff exists → suggest `/session-start` instead.
 

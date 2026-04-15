@@ -232,6 +232,43 @@ describe('memory.js', () => {
     });
   });
 
+  describe('handoff (read)', () => {
+    it('prints per-workstream handoff when it exists', () => {
+      writeFile('workstreams/auth/handoff.md', '---\nname: auth\ntype: project\n---\nauth-specific');
+      writeFile('workstreams/handoff.md', '---\nname: g\ntype: project\n---\nglobal');
+
+      const result = run('handoff auth');
+
+      assert.ok(result.includes('auth-specific'));
+      assert.ok(!result.includes('global'));
+    });
+
+    it('falls back to global when per-workstream missing', () => {
+      writeFile('workstreams/handoff.md', '---\nname: g\ntype: project\n---\nglobal content');
+
+      const result = run('handoff unknown');
+
+      assert.ok(result.includes('global content'));
+    });
+
+    it('prints global when no workstream argument', () => {
+      writeFile('workstreams/handoff.md', '---\nname: g\ntype: project\n---\nglobal only');
+
+      const result = run('handoff');
+
+      assert.ok(result.includes('global only'));
+    });
+
+    it('prints NO_HANDOFF when nothing exists', () => {
+      const result = run('handoff missing');
+      assert.ok(result.includes('NO_HANDOFF'));
+    });
+
+    it('rejects path-traversal in workstream name', () => {
+      assert.throws(() => run('handoff ../../../etc'));
+    });
+  });
+
   describe('write-handoff', () => {
     function writeContent(content) {
       const p = path.join(TMP, 'handoff-content.md');
@@ -428,6 +465,27 @@ describe('memory.js', () => {
 
       const ws = JSON.parse(fs.readFileSync(path.join(TMP, 'workstreams.json'), 'utf8'));
       assert.deepEqual(ws.auth.sort(), ['login', 'session', 'token']);
+    });
+
+    it('prefers per-workstream handoff date over global', () => {
+      run('add-workstream auth login');
+      writeFile('workstreams/handoff.md', '---\nname: g\ntype: project\n---\nglobal');
+      writeFile('workstreams/auth/handoff.md', '---\nname: auth\ntype: project\n---\nper-ws');
+
+      const result = run('workstreams');
+
+      assert.ok(result.includes('auth'));
+      assert.ok(result.includes('handoff:'));
+      assert.ok(!result.includes('(global)'));
+    });
+
+    it('marks handoff as global when no per-workstream handoff exists', () => {
+      run('add-workstream auth login');
+      writeFile('workstreams/handoff.md', '---\nname: g\ntype: project\n---\nglobal only');
+
+      const result = run('workstreams');
+
+      assert.ok(result.includes('(global)'));
     });
   });
 

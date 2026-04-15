@@ -456,7 +456,14 @@ function listWorkstreams() {
     const enriched = entries.map(([name, keywords]) => {
         const files = queryWorkstream(name);
         const lastTouched = files.length ? files[0].mtime : null;
-        const handoff = files.find(f => f.name === 'workstreams/handoff.md');
+        const perWsHandoffPath = path.join(MEMORY_DIR, 'workstreams', name, 'handoff.md');
+        const globalHandoffPath = path.join(MEMORY_DIR, 'workstreams', 'handoff.md');
+        let handoff = null;
+        if (fs.existsSync(perWsHandoffPath)) {
+            handoff = { mtime: fs.statSync(perWsHandoffPath).mtime, source: 'per-workstream' };
+        } else if (fs.existsSync(globalHandoffPath)) {
+            handoff = { mtime: fs.statSync(globalHandoffPath).mtime, source: 'global' };
+        }
         const weights = files.map(f => calculateWeight(f, weightConfig)).sort((a, b) => b - a);
         const score = weights.slice(0, 5).reduce((sum, w) => sum + w, 0);
         return { name, keywords, files, lastTouched, handoff, score };
@@ -468,7 +475,8 @@ function listWorkstreams() {
     enriched.forEach(({ name, keywords, files, lastTouched, handoff, score }, i) => {
         const lastDate = lastTouched ? lastTouched.toISOString().slice(0, 10) : '—';
         const handoffDate = handoff ? handoff.mtime.toISOString().slice(0, 10) : null;
-        console.log(`  ${i + 1}. ${name} — ${files.length} files, score: ${score.toFixed(1)}, last touched: ${lastDate}${handoffDate ? `, handoff: ${handoffDate}` : ''}`);
+        const handoffLabel = handoff ? `, handoff: ${handoffDate}${handoff.source === 'global' ? ' (global)' : ''}` : '';
+        console.log(`  ${i + 1}. ${name} — ${files.length} files, score: ${score.toFixed(1)}, last touched: ${lastDate}${handoffLabel}`);
         console.log(`     keywords: ${keywords.join(', ')}`);
     });
     console.log(`\n  ➕ Add new: memory.js add-workstream <name> <keywords...>`);
@@ -745,6 +753,21 @@ function printSessionChanges() {
     console.log(JSON.stringify(sessionChanges(), null, 2));
 }
 
+function printHandoff(...args) {
+    const ws = (args[0] || '').trim();
+    if (ws) {
+        if (!/^[a-zA-Z0-9_-]+$/.test(ws)) {
+            console.error(`Invalid workstream name: "${ws}"`);
+            process.exit(1);
+        }
+        const perWs = path.join(MEMORY_DIR, 'workstreams', ws, 'handoff.md');
+        if (fs.existsSync(perWs)) return process.stdout.write(fs.readFileSync(perWs, 'utf-8'));
+    }
+    const global = path.join(MEMORY_DIR, 'workstreams', 'handoff.md');
+    if (fs.existsSync(global)) return process.stdout.write(fs.readFileSync(global, 'utf-8'));
+    console.log('NO_HANDOFF');
+}
+
 function writeHandoff(...args) {
     const wsArg = args.find(a => a && a.startsWith('--workstream='));
     const contentArg = args.find(a => a && a.startsWith('--content='));
@@ -792,6 +815,7 @@ const commands = {
     'session-activity': printSessionActivity,
     'session-changes': printSessionChanges,
     'write-handoff': writeHandoff,
+    handoff: printHandoff,
     recurring: printRecurring,
     reindex,
     health,
@@ -819,6 +843,7 @@ if (require.main === module) {
         console.log('  session-activity       — current session items since last SESSION_START (JSON)');
         console.log('  session-changes        — git files+commits since session start (JSON)');
         console.log('  write-handoff --workstream=<name> --content=<f>  — write workstreams/<name>/handoff.md');
+        console.log('  handoff [<workstream>]  — print per-workstream handoff if exists, else global');
         console.log('  recurring              — find recurring feedback patterns');
         console.log('  reindex                — rebuild MEMORY.md index sorted by weight');
         console.log('  health                 — check memory health (dead links, stale, size, dupes)');
