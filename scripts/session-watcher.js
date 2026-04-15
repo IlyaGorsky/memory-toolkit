@@ -13,6 +13,7 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execSync } = require('child_process');
 const https = require('https');
@@ -183,7 +184,7 @@ function callCLI(conversationText) {
     const prompt = `${ANALYSIS_PROMPT}\n\n---\n\n${conversationText}`;
     const result = execSync(
       'claude -p --model claude-haiku-4-5-20251001 --output-format text --disable-slash-commands',
-      { input: prompt, timeout: 30000, encoding: 'utf8', maxBuffer: 1024 * 1024 }
+      { input: prompt, timeout: 30000, encoding: 'utf8', maxBuffer: 1024 * 1024, cwd: os.tmpdir() }
     );
     return parseFindings(result);
   } catch {
