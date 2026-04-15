@@ -1,9 +1,9 @@
 {
   "description": "Memory lifecycle hooks — auto-save before compact, log commits, show handoff on start",
   "hooks": {
-    "PreToolUse": [
+    "UserPromptSubmit": [
       {
-        "matcher": "Skill",
+        "matcher": "",
         "hooks": [
           {
             "type": "command",

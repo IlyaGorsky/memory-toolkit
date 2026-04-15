@@ -421,19 +421,18 @@ describe('e2e: isolated sandbox', () => {
       assert.ok(events.includes('PostToolUse'), 'should have PostToolUse');
       assert.ok(events.includes('SessionStart'), 'should have SessionStart');
       assert.ok(events.includes('SubagentStop'), 'should have SubagentStop');
-      assert.ok(events.includes('PreToolUse'), 'should have PreToolUse');
+      assert.ok(events.includes('UserPromptSubmit'), 'should have UserPromptSubmit');
     });
 
-    it('PreToolUse hook targets Skill tool and runs pipeline-hint', () => {
+    it('UserPromptSubmit hook runs pipeline-hint', () => {
       const hooksJson = JSON.parse(
         fs.readFileSync(path.join(PLUGIN_ROOT, 'hooks', 'hooks.json'), 'utf8')
       );
-      const preTool = hooksJson.hooks.PreToolUse || [];
-      const skillMatcher = preTool.find(m => m.matcher === 'Skill');
-      assert.ok(skillMatcher, 'PreToolUse should have matcher="Skill"');
+      const ups = hooksJson.hooks.UserPromptSubmit || [];
+      assert.ok(ups.length > 0, 'UserPromptSubmit must be configured');
       assert.ok(
-        skillMatcher.hooks[0].command.includes('pipeline-hint'),
-        'Skill PreToolUse should run pipeline-hint.js'
+        ups[0].hooks[0].command.includes('pipeline-hint'),
+        'UserPromptSubmit should run pipeline-hint.js'
       );
     });
 
@@ -729,7 +728,7 @@ describe('e2e: isolated sandbox', () => {
 
   // --- Pipeline hint hook (PreToolUse on Skill) ---
 
-  describe('pipeline-hint.js PreToolUse hook', () => {
+  describe('pipeline-hint.js UserPromptSubmit hook', () => {
     function hintRun(stdinJson) {
       try {
         return execSync(
@@ -737,7 +736,7 @@ describe('e2e: isolated sandbox', () => {
           {
             encoding: 'utf8',
             timeout: 5000,
-            env: { ...process.env, CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT },
+            env: { ...process.env, CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, MEMORY_TOOLKIT_PIPELINE_DEBUG: '1' },
           }
         );
       } catch (e) {
@@ -745,35 +744,35 @@ describe('e2e: isolated sandbox', () => {
       }
     }
 
-    it('injects contract for pipeline skill (session-end)', () => {
-      const out = hintRun({ tool_name: 'Skill', tool_input: { skill: 'session-end', args: 'quick' } });
+    it('injects contract for /session-end', () => {
+      const out = hintRun({ prompt: '/session-end quick' });
       assert.ok(out.trim(), 'should produce output for pipeline skill');
       const json = JSON.parse(out.trim());
-      assert.equal(json.hookSpecificOutput.hookEventName, 'PreToolUse');
+      assert.equal(json.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
       assert.ok(json.hookSpecificOutput.additionalContext.includes('PIPELINE SKILL DETECTED: session-end'));
       assert.ok(json.hookSpecificOutput.additionalContext.includes('PIPELINE START'));
       assert.ok(json.hookSpecificOutput.additionalContext.includes('session-end.yaml'));
     });
 
-    it('handles qualified skill name (memory-toolkit:session-start)', () => {
-      const out = hintRun({ tool_name: 'Skill', tool_input: { skill: 'memory-toolkit:session-start' } });
+    it('handles qualified slash (/memory-toolkit:session-start)', () => {
+      const out = hintRun({ prompt: '/memory-toolkit:session-start' });
       assert.ok(out.trim(), 'should produce output');
       const json = JSON.parse(out.trim());
       assert.ok(json.hookSpecificOutput.additionalContext.includes('session-start'));
     });
 
-    it('stays silent for non-pipeline skill (memory)', () => {
-      const out = hintRun({ tool_name: 'Skill', tool_input: { skill: 'memory', args: 'list' } });
+    it('stays silent for non-pipeline skill (/memory)', () => {
+      const out = hintRun({ prompt: '/memory list' });
       assert.equal(out.trim(), '', 'no output for non-pipeline skill');
     });
 
-    it('stays silent for non-Skill tool', () => {
-      const out = hintRun({ tool_name: 'Bash', tool_input: { command: 'ls' } });
-      assert.equal(out.trim(), '', 'no output for Bash tool');
+    it('stays silent for plain text (no slash)', () => {
+      const out = hintRun({ prompt: 'hello world' });
+      assert.equal(out.trim(), '', 'no output for plain prompt');
     });
 
-    it('stays silent for unknown skill', () => {
-      const out = hintRun({ tool_name: 'Skill', tool_input: { skill: 'does-not-exist' } });
+    it('stays silent for unknown skill (/does-not-exist)', () => {
+      const out = hintRun({ prompt: '/does-not-exist' });
       assert.equal(out.trim(), '', 'no output for unknown skill');
     });
 

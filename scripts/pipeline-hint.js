@@ -1,12 +1,21 @@
 #!/usr/bin/env node
-// PreToolUse hook for the Skill tool.
-// If the invoked skill has `metadata.pipeline: true` in its frontmatter,
-// inject the task-template orchestrator contract into the tool-call context
-// so the model routes through the pipeline instead of following SKILL.md prose.
+// UserPromptSubmit hook — intercepts /skill slash commands.
+// If the invoked skill has `metadata.pipeline: true`, inject the task-template
+// orchestrator contract so the model routes through the pipeline instead of
+// following SKILL.md prose.
+//
+// Why UserPromptSubmit and not PreToolUse/Skill: slash commands don't go
+// through the Skill tool — CC loads SKILL.md directly from the user prompt.
+// PreToolUse/Skill only fires when the LLM itself invokes the Skill tool.
 
 const fs = require('fs');
 const path = require('path');
 const log = require('./lib/log');
+
+// Debug-only: injects a loud orchestrator contract banner to verify pipeline
+// routing works. Off by default — in normal use task-template's SKILL.md prose
+// is enough. Enable with MEMORY_TOOLKIT_PIPELINE_DEBUG=1.
+if (process.env.MEMORY_TOOLKIT_PIPELINE_DEBUG !== '1') process.exit(0);
 
 let stdin = '';
 try { stdin = fs.readFileSync(0, 'utf8'); } catch {}
@@ -14,12 +23,14 @@ try { stdin = fs.readFileSync(0, 'utf8'); } catch {}
 let payload = {};
 try { payload = JSON.parse(stdin); } catch { process.exit(0); }
 
-const toolName = payload.tool_name || '';
-if (toolName !== 'Skill') process.exit(0);
+const prompt = (payload.prompt || '').trim();
+if (!prompt.startsWith('/')) process.exit(0);
 
-const rawSkill = (payload.tool_input && payload.tool_input.skill) || '';
-if (!rawSkill) process.exit(0);
+// Parse "/skill-name args" or "/plugin:skill-name args"
+const m = prompt.match(/^\/([a-zA-Z0-9_-]+(?::[a-zA-Z0-9_-]+)?)(?:\s|$)/);
+if (!m) process.exit(0);
 
+const rawSkill = m[1];
 const skillName = rawSkill.includes(':') ? rawSkill.split(':').pop() : rawSkill;
 
 const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || path.resolve(__dirname, '..');
@@ -73,7 +84,7 @@ const contract = [
 
 const output = {
   hookSpecificOutput: {
-    hookEventName: 'PreToolUse',
+    hookEventName: 'UserPromptSubmit',
     additionalContext: contract,
   },
 };
