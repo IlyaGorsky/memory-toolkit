@@ -87,12 +87,13 @@ memory-toolkit saves the session.
  └──────────────────────────────┐
                                 ▼
  ~/.claude/projects/<project>/memory/
- ├ MEMORY.md              ← index (loaded every session)
- ├ workstreams/handoff.md  ← session continuity
- ├ notes/<today>.md        ← daily notes (auto + manual)
+ ├ MEMORY.md                     ← index (loaded every session)
+ ├ workstreams/handoff.md        ← global handoff (last session, any workstream)
+ ├ workstreams/<name>/handoff.md ← per-workstream handoff, routed by /session-end
+ ├ notes/<today>.md              ← daily notes (auto + manual)
  ├ feedback/ decisions/ reference/
- ├ sessions.jsonl          ← session ID index
- └ .watcher-state.json    ← phase, counters
+ ├ sessions.jsonl                ← session ID index
+ └ .watcher-state.json           ← phase, counters
 ```
 
 <details>
@@ -198,14 +199,15 @@ Cost: ~$0.01–0.05 per session. Requires `ANTHROPIC_API_KEY` or claude CLI.
 Mon  /session-start auth-refactor
        ├── loads decisions/auth-token-format.md
        ├── loads feedback/no-mocks-in-tests.md
-       └── /session-end ──→ workstreams/handoff.md
+       └── /session-end ──→ workstreams/auth/handoff.md (routed by activity)
+                       ──→ workstreams/handoff.md (global summary + cross-refs)
 
 Tue  /session-start billing
        ├── loads billing context
-       └── auth-refactor handoff untouched
+       └── workstreams/auth/handoff.md untouched
 
 Thu  /session-continue auth-refactor
-       └── picks up from Monday's handoff, fresh context
+       └── reads workstreams/auth/handoff.md — picks up exactly where auth stopped
 ```
 
 ### Use case 4: Session findings become repo documentation
@@ -287,7 +289,9 @@ SessionStart hook (fires automatically)
 ├── notes/               ← daily notes (auto: hooks + watcher + /park)
 ├── profile/             ← (optional) user role, preferences
 └── workstreams/
-    └── handoff.md       ← session continuity
+    ├── handoff.md       ← global handoff (last session, any workstream)
+    └── <name>/
+        └── handoff.md   ← per-workstream handoff, written by /session-end
 ```
 
 All files are markdown. Human-readable, git-friendly, portable.
@@ -354,7 +358,6 @@ They're complementary — memory-toolkit for session workflow, claude-mem or cla
 
 ## Current limitations
 
-- **Workstream isolation** — `workstreams/handoff.md` is currently a single file overwritten on every `/session-end`. True per-workstream isolation is on the roadmap.
 - **Background watcher** — requires `ANTHROPIC_API_KEY` or claude CLI. Falls back to no-op if neither is available.
 
 ## Philosophy
