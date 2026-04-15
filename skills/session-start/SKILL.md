@@ -144,10 +144,12 @@ Show: open/done task counts, blockers, pickable now. **Do NOT read full files** 
 
 My hypothesis: focus on **{candidate #1}** because {reasoning grounded in handoff/git/recency}. Recommendation: **{Model}**.
 
-Agree, or different plan?
+Agree, pick another candidate, or **start a new workstream**?
 ```
 
 **Close with a hypothesis, not a menu.** Users iterate on a proposal faster than they pick from a list. Candidates 2-3 stay visible for quick override.
+
+**MANDATORY:** the closing line must keep "start a new workstream" as an explicit option. Never omit it — the hypothesis frame hides existing workstreams, so the escape hatch to create a new one has to be surfaced every time. If the user picks it, run Step 1b (workstream creation).
 
 **Model selection:** Opus = planning/architecture/exploration. Sonnet = execution by plan, refactoring, review. Haiku = routine/translation/pattern copy.
 
