@@ -427,6 +427,40 @@ MT_LOG=debug claude 2>mt-debug.log    # capture to file for bug reports
 2. Debug log (`MT_LOG=debug claude 2>mt-debug.log`)
 3. What you expected vs what happened
 
+## FAQ
+
+### Does it conflict with Claude Code auto-memory?
+
+No — they collaborate. CC auto-memory writes to `MEMORY.md` based on user facts; memory-toolkit handles session-level state (handoffs, workstreams, DOC: notes). They edit different parts of the file and coexist via a shared index.
+
+### Where is my memory stored?
+
+`~/.claude/projects/-<project-slug>/memory/`. Fully local filesystem. Nothing leaves your machine unless you enable the optional watcher with an API key.
+
+### Does anything get uploaded?
+
+By default — no. Memory stays on your disk. The optional `session-watcher` hook can analyze conversation chunks via Haiku (either your `ANTHROPIC_API_KEY` or via the `claude -p` CLI subprocess) — and that's the only outbound traffic. Disable the watcher by removing it from `hooks.json` if you want zero network.
+
+### Can I use it without hooks?
+
+Yes. The CLI (`node memory.js …`) works standalone — hooks are a convenience layer for auto-save. You can invoke skills manually (`/session-start`, `/memory note`, etc.) and never register a single hook.
+
+### Does it slow down my session?
+
+- `session-log` / `session-save` — under 500 ms
+- `session-watcher` — throttled to once per 3 min, runs async, never blocks
+- `pipeline-hint` — disabled by default
+
+Invisible in practice on a modern laptop.
+
+### Does it work for teams or shared memory?
+
+No — designed for personal sessions. Memory dir is per-user, per-project. Team-level memory is on the research roadmap, not shipped.
+
+### How do I uninstall?
+
+`claude plugin uninstall memory-toolkit`. Your memory files in `~/.claude/projects/*/memory/` stay — delete them manually if you want a full wipe.
+
 ## License
 
 MIT
