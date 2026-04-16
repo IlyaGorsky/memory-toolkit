@@ -191,7 +191,7 @@ Haiku analyzes: corrections / decisions / plans
 saved to notes/ automatically — no manual effort
 ```
 
-Cost: ~$0.01–0.05 per session. Requires `ANTHROPIC_API_KEY` or claude CLI.
+Two equal paths: `ANTHROPIC_API_KEY` (pay-per-call, ~$0.01–0.05/session) or `claude` CLI with Max/Team subscription (schema-enforced structured output via `--json-schema`, no extra cost). Both produce the same findings.
 
 ### Use case 3: Switching between workstreams
 
@@ -358,7 +358,7 @@ They're complementary — memory-toolkit for session workflow, claude-mem or cla
 
 ## Current limitations
 
-- **Background watcher** — requires `ANTHROPIC_API_KEY` or claude CLI. Falls back to no-op if neither is available.
+- **Background watcher** — requires `ANTHROPIC_API_KEY` or `claude` CLI (Max/Team subscription). No-op if neither is available. Parse-error rate surfaces in `/memory health` if the CLI path degrades.
 
 ## Philosophy
 
