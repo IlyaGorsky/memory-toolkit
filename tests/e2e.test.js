@@ -9,6 +9,7 @@ const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { execSync} = require('child_process');
 
 const PLUGIN_ROOT = path.join(__dirname, '..');
@@ -1007,6 +1008,56 @@ describe('e2e: isolated sandbox', () => {
       const entry = JSON.parse(r);
       assert.equal(entry.level, 'debug');
       assert.equal(entry.msg, 'dbg-test');
+    });
+
+    it('appends to MT_LOG_FILE while still writing to stderr', () => {
+      const logFile = path.join(os.tmpdir(), `mt-log-sink-${Date.now()}.log`);
+      try {
+        const stderr = execSync(
+          `MT_LOG_FILE=${logFile} node -e "var l=require('${path.join(PLUGIN_ROOT, 'scripts', 'lib', 'log')}');l.info('first');l.info('second')" 2>&1 1>/dev/null`,
+          { encoding: 'utf8', timeout: 3000 }
+        );
+        const stderrLines = stderr.trim().split('\n').filter(Boolean);
+        assert.equal(stderrLines.length, 2, 'stderr should receive both lines');
+        const fileLines = fs.readFileSync(logFile, 'utf8').trim().split('\n').filter(Boolean);
+        assert.equal(fileLines.length, 2, 'file should receive both lines');
+        assert.equal(JSON.parse(fileLines[0]).msg, 'first');
+        assert.equal(JSON.parse(fileLines[1]).msg, 'second');
+      } finally {
+        try { fs.unlinkSync(logFile); } catch {}
+      }
+    });
+
+    it('creates parent directory for MT_LOG_FILE if missing', () => {
+      const dir = path.join(os.tmpdir(), `mt-log-dir-${Date.now()}`, 'nested');
+      const logFile = path.join(dir, 'hook.log');
+      try {
+        execSync(
+          `MT_LOG_FILE=${logFile} node -e "require('${path.join(PLUGIN_ROOT, 'scripts', 'lib', 'log')}').warn('mk')" 2>/dev/null`,
+          { encoding: 'utf8', timeout: 3000 }
+        );
+        assert.ok(fs.existsSync(logFile), 'log file should be created');
+        const entry = JSON.parse(fs.readFileSync(logFile, 'utf8').trim());
+        assert.equal(entry.msg, 'mk');
+      } finally {
+        try { fs.rmSync(path.dirname(path.dirname(logFile)), { recursive: true, force: true }); } catch {}
+      }
+    });
+
+    it('does not throw when MT_LOG_FILE path is unwritable', () => {
+      // /dev/full on Linux would fail writes; on macOS use a path under a regular file
+      const blocker = path.join(os.tmpdir(), `mt-log-blocker-${Date.now()}`);
+      fs.writeFileSync(blocker, 'x');
+      const badPath = path.join(blocker, 'child.log'); // blocker is a file, can't be a dir
+      try {
+        const r = execSync(
+          `MT_LOG_FILE=${badPath} node -e "require('${path.join(PLUGIN_ROOT, 'scripts', 'lib', 'log')}').info('survive');console.log('ok')" 2>/dev/null`,
+          { encoding: 'utf8', timeout: 3000 }
+        ).trim();
+        assert.equal(r, 'ok', 'caller should not crash when file sink fails');
+      } finally {
+        try { fs.unlinkSync(blocker); } catch {}
+      }
     });
   });
 

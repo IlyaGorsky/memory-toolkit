@@ -370,23 +370,42 @@ See [PHILOSOPHY.md](PHILOSOPHY.md) for the full rationale.
 
 ## Troubleshooting
 
-If something isn't working, run with debug logging:
-
-```bash
-MT_LOG=debug claude
-```
-
-This outputs structured JSON logs to stderr from all hook scripts (session-log, session-watcher, session-save). Each line includes plugin version, timestamp, and context:
+If something isn't working, turn on debug logging. Hook scripts (session-log, session-watcher, session-save) emit structured JSON — one line per event, including plugin version, timestamp, and context:
 
 ```json
 {"ts":"2026-04-12T18:19:32.864Z","v":"1.3.6","level":"debug","msg":"session-log start","sessionId":"abc-123","memoryDir":"/..."}
 ```
 
-To capture for bug reports or development:
+Two ways to see these logs — pick whichever matches how you run Claude Code.
+
+**Option 1 — persistent file sink via `settings.local.json`** (works everywhere: CLI, VS Code extension, remote agents):
+
+```jsonc
+// .claude/settings.local.json  (project)  or  ~/.claude/settings.json  (global)
+{
+  "env": {
+    "MT_LOG": "debug",
+    "MT_LOG_FILE": "~/.claude/logs/memory-toolkit.log"
+  }
+}
+```
+
+Restart your session so Claude Code picks up the new env. Parent dirs are created automatically; logs are appended (not truncated), so `tail -f` works:
 
 ```bash
-MT_LOG=debug claude 2>mt-debug.log
+tail -f ~/.claude/logs/memory-toolkit.log
 ```
+
+This is the only option that surfaces hook stderr inside the VS Code extension / other embedded harnesses — they swallow child-process stderr, so `2>` redirection from the host shell can't reach it.
+
+**Option 2 — stderr redirect** (CLI only, one-shot debug of a single run):
+
+```bash
+MT_LOG=debug claude                   # watch live in terminal
+MT_LOG=debug claude 2>mt-debug.log    # capture to file for bug reports
+```
+
+`MT_LOG_FILE` and `2>` are additive — setting both writes to the file *and* to stderr.
 
 **For plugin developers:** `MT_LOG=debug` is the primary tool for debugging hook behavior — shows memory dir resolution, AP-20 path updates, watcher throttle decisions, and transcript parsing.
 
