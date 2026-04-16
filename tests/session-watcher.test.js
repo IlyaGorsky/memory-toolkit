@@ -9,7 +9,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 
-const { parseFindings, extractText, readNewMessages, buildConversationText, ANALYSIS_PROMPT } = require('../scripts/session-watcher');
+const { parseFindings, extractText, readNewMessages, buildConversationText, ANALYSIS_PROMPT, extractStructuredOutput, FINDINGS_SCHEMA } = require('../scripts/session-watcher');
 
 // --- parseFindings ---
 
@@ -61,6 +61,76 @@ describe('parseFindings', () => {
     const result = parseFindings(input);
     assert.equal(result.findings.length, 0);
     assert.equal(result.phase, 'implementation');
+  });
+
+  it('extracts JSON from prose preamble', () => {
+    const input = 'Sure, here is the analysis:\n{"findings": [{"type": "decision", "summary": "use Haiku"}], "phase": "planning"}';
+    const result = parseFindings(input);
+    assert.equal(result.findings.length, 1);
+    assert.equal(result.phase, 'planning');
+  });
+
+  it('returns empty on prose without any JSON', () => {
+    const input = 'I did not find anything worth saving in this conversation.';
+    const result = parseFindings(input);
+    assert.equal(result.findings.length, 0);
+    assert.equal(result.phase, null);
+  });
+});
+
+// --- extractStructuredOutput ---
+
+describe('extractStructuredOutput', () => {
+  it('reads structured_output object from envelope', () => {
+    const envelope = JSON.stringify({
+      type: 'result',
+      result: 'Done.',
+      structured_output: {
+        findings: [{ type: 'decision', summary: 'use Haiku' }],
+        phase: 'planning',
+      },
+    });
+    const res = extractStructuredOutput(envelope);
+    assert.equal(res.findings.length, 1);
+    assert.equal(res.phase, 'planning');
+    assert.equal(res.parseError, false);
+  });
+
+  it('accepts null phase', () => {
+    const envelope = JSON.stringify({ structured_output: { findings: [], phase: null } });
+    const res = extractStructuredOutput(envelope);
+    assert.equal(res.phase, null);
+    assert.equal(res.parseError, false);
+  });
+
+  it('parseError on missing structured_output field', () => {
+    const envelope = JSON.stringify({ type: 'result', result: 'Done.' });
+    const res = extractStructuredOutput(envelope);
+    assert.equal(res.parseError, true);
+    assert.equal(res.findings.length, 0);
+  });
+
+  it('parseError on invalid envelope JSON', () => {
+    const res = extractStructuredOutput('not json at all');
+    assert.equal(res.parseError, true);
+  });
+
+  it('parseError when findings is not an array', () => {
+    const envelope = JSON.stringify({ structured_output: { findings: 'nope', phase: null } });
+    const res = extractStructuredOutput(envelope);
+    assert.equal(res.parseError, true);
+  });
+});
+
+// --- FINDINGS_SCHEMA ---
+
+describe('FINDINGS_SCHEMA', () => {
+  it('constrains findings and phase shape for --json-schema', () => {
+    assert.equal(FINDINGS_SCHEMA.type, 'object');
+    assert.deepEqual(FINDINGS_SCHEMA.required, ['findings', 'phase']);
+    assert.equal(FINDINGS_SCHEMA.properties.findings.type, 'array');
+    assert.ok(FINDINGS_SCHEMA.properties.phase.enum.includes('planning'));
+    assert.ok(FINDINGS_SCHEMA.properties.phase.enum.includes(null));
   });
 });
 

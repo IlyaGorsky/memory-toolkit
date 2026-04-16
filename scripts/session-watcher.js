@@ -179,28 +179,63 @@ function callAPI(apiKey, conversationText) {
   });
 }
 
+const FINDINGS_SCHEMA = {
+  type: 'object',
+  properties: {
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['correction', 'decision', 'plan', 'documentation'] },
+          summary: { type: 'string' },
+        },
+        required: ['type', 'summary'],
+      },
+    },
+    phase: { type: ['string', 'null'], enum: ['planning', 'implementation', 'review', 'debug', null] },
+  },
+  required: ['findings', 'phase'],
+};
+
+function extractStructuredOutput(stdout) {
+  try {
+    const envelope = JSON.parse(stdout);
+    const out = envelope.structured_output;
+    if (out && typeof out === 'object' && Array.isArray(out.findings)) {
+      return { findings: out.findings, phase: out.phase || null, parseError: false };
+    }
+  } catch {}
+  return { findings: [], phase: null, parseError: true };
+}
+
 function callCLI(conversationText) {
   try {
     const prompt = `${ANALYSIS_PROMPT}\n\n---\n\n${conversationText}`;
-    const result = execSync(
-      'claude -p --model claude-haiku-4-5-20251001 --output-format text --disable-slash-commands',
+    const stdout = execSync(
+      [
+        'claude -p',
+        '--model claude-haiku-4-5-20251001',
+        '--output-format json',
+        `--json-schema '${JSON.stringify(FINDINGS_SCHEMA)}'`,
+        '--disable-slash-commands',
+      ].join(' '),
       { input: prompt, timeout: 30000, encoding: 'utf8', maxBuffer: 1024 * 1024, cwd: os.tmpdir() }
     );
-    return parseFindings(result);
+    return extractStructuredOutput(stdout);
   } catch {
-    return { findings: [], phase: null };
+    return { findings: [], phase: null, parseError: true };
   }
 }
 
 function parseFindings(text) {
+  const jsonMatch = text && text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return { findings: [], phase: null, parseError: true };
   try {
-    // Extract JSON from response (may have markdown wrapper)
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return { findings: [], phase: null };
     const json = JSON.parse(jsonMatch[0]);
-    return { findings: json.findings || [], phase: json.phase || null };
+    return { findings: json.findings || [], phase: json.phase || null, parseError: false };
   } catch {
-    return { findings: [], phase: null };
+    return { findings: [], phase: null, parseError: true };
   }
 }
 
@@ -372,5 +407,5 @@ if (require.main === module) {
   statePath = path.join(memoryDir, '.watcher-state.json');
   main().catch(() => exitJson());
 } else {
-  module.exports = { parseFindings, extractText, readNewMessages, buildConversationText, ANALYSIS_PROMPT };
+  module.exports = { parseFindings, extractText, readNewMessages, buildConversationText, ANALYSIS_PROMPT, extractStructuredOutput, FINDINGS_SCHEMA };
 }
