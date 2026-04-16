@@ -1,5 +1,10 @@
 # memory-toolkit
 
+[![Release](https://img.shields.io/github/v/release/IlyaGorsky/memory-toolkit?color=blue)](https://github.com/IlyaGorsky/memory-toolkit/releases)
+[![License](https://img.shields.io/github/license/IlyaGorsky/memory-toolkit)](LICENSE)
+[![Claude Code Plugin](https://img.shields.io/badge/Claude_Code-Plugin-orange)](https://docs.claude.com/en/docs/claude-code)
+[![Last commit](https://img.shields.io/github/last-commit/IlyaGorsky/memory-toolkit)](https://github.com/IlyaGorsky/memory-toolkit/commits/main)
+
 **CLAUDE.md is for your codebase. Not for your sessions.**
 
 People stuff session state into CLAUDE.md because there's nowhere else to put it. But CLAUDE.md is static — it doesn't know what you did today, what you decided, or where you stopped. And every conversation context you build up gets destroyed at compaction.
