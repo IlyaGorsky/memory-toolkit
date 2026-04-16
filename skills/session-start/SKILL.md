@@ -39,18 +39,20 @@ for WS in <top-3 from sorted list>; do
 done
 ```
 
-**Decision tree:**
+**Decision tree — source of focus candidates:**
 
-| Handoff state | Action |
+| Handoff state | Candidates source |
 |---|---|
-| ≤7 days old, has "What's next" | Skip menu, use handoff as primary candidates |
-| >7 days old | Show as stale context, present menu |
-| Missing/empty/only `SESSION_START` markers | Say "no usable context", suggest `/session-restore`, fall through to menu |
-| No handoff, no notes | Show menu only |
+| ≤7 days old, has "What's next" | Handoff primary (workstreams table still rendered for context) |
+| >7 days old | Workstreams table; handoff shown as stale context |
+| Missing/empty/only `SESSION_START` markers | Workstreams table; say "no usable context", suggest `/session-restore` |
+| No handoff, no notes | Workstreams table only |
+
+The workstreams table in Step 1b is **always** rendered in Step 4 — it's the session's map, not a fallback. The decision tree only controls where focus candidates come from.
 
 ---
 
-## Step 1b: Workstream menu (fallback)
+## Step 1b: Workstreams table (always rendered)
 
 Render as table. Top-3 rows show synthesized "What's in" from `--brief`; rest show keywords. ➕ row is mandatory.
 
