@@ -429,6 +429,18 @@ MT_LOG=debug claude 2>mt-debug.log    # capture to file for bug reports
 
 ## FAQ
 
+### Will it overwrite my existing MEMORY.md?
+
+No. Installing the plugin only registers hooks and skills with Claude Code — it doesn't touch any files in your memory directory.
+
+When you run `/memory-setup` on a project that already has a `MEMORY.md` (e.g., from Claude Code auto-memory), the skill:
+
+- Creates a timestamped backup first: `MEMORY.md.backup.YYYYMMDD-HHMMSS`
+- Shows the proposed changes before applying anything
+- Never overwrites or deletes existing entries — only adds missing structure
+
+If anything looks off, restore with `cp MEMORY.md.backup.<timestamp> MEMORY.md`.
+
 ### Does it conflict with Claude Code auto-memory?
 
 No — they collaborate. CC auto-memory writes to `MEMORY.md` based on user facts; memory-toolkit handles session-level state (handoffs, workstreams, DOC: notes). They edit different parts of the file and coexist via a shared index.
