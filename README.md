@@ -459,7 +459,7 @@ Yes. The CLI (`node memory.js …`) works standalone — hooks are a convenience
 
 ### Does it slow down my session?
 
-- `session-log` / `session-save` — under 500 ms
+- `session-log` / `session-save` — typically under 150 ms (500 ms budget)
 - `session-watcher` — throttled to once per 3 min, runs async, never blocks
 - `pipeline-hint` — disabled by default
 
