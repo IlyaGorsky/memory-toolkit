@@ -668,5 +668,41 @@ describe('memory.js', () => {
       const result = run('health');
       assert.ok(result.includes('No MEMORY.md'));
     });
+
+    it('warns when watcher parse errors dominate findings', () => {
+      writeFile('MEMORY.md', '# Memory\n');
+      writeFile('.watcher-state.json', JSON.stringify({
+        parseErrors: 10,
+        findingsCount: 2,
+        lastParseError: '2026-04-16T05:00:00.000Z',
+      }));
+
+      const result = run('health');
+      assert.ok(result.includes('session-watcher'));
+      assert.ok(result.includes('10 parse errors'));
+      assert.ok(result.includes('83%'));
+    });
+
+    it('no watcher warning when parseErrors below threshold', () => {
+      writeFile('MEMORY.md', '# Memory\n');
+      writeFile('.watcher-state.json', JSON.stringify({
+        parseErrors: 3,
+        findingsCount: 1,
+      }));
+
+      const result = run('health');
+      assert.ok(!result.includes('session-watcher'));
+    });
+
+    it('no watcher warning when findings dominate errors', () => {
+      writeFile('MEMORY.md', '# Memory\n');
+      writeFile('.watcher-state.json', JSON.stringify({
+        parseErrors: 6,
+        findingsCount: 50,
+      }));
+
+      const result = run('health');
+      assert.ok(!result.includes('session-watcher'));
+    });
   });
 });

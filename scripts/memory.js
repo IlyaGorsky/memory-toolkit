@@ -615,6 +615,26 @@ function health() {
         } catch {}
     }
 
+    // 6. Session-watcher parse error rate
+    const watcherStatePath = path.join(MEMORY_DIR, '.watcher-state.json');
+    if (fs.existsSync(watcherStatePath)) {
+        try {
+            const ws = JSON.parse(fs.readFileSync(watcherStatePath, 'utf-8'));
+            const parseErrors = ws.parseErrors || 0;
+            const findingsCount = ws.findingsCount || 0;
+            const total = parseErrors + findingsCount;
+            const ratio = total > 0 ? parseErrors / total : 0;
+            if (parseErrors > 5 && ratio > 0.5) {
+                const lastErr = ws.lastParseError ? ` (last: ${ws.lastParseError})` : '';
+                issues.push({
+                    level: 'warn',
+                    check: 'watcher-parse-errors',
+                    message: `session-watcher: ${parseErrors} parse errors vs ${findingsCount} findings (${Math.round(ratio * 100)}%)${lastErr}`,
+                });
+            }
+        } catch {}
+    }
+
     // Output
     if (issues.length === 0) {
         console.log('✓ Memory healthy — no issues found');

@@ -35,7 +35,7 @@ let statePath = '';
 
 function loadState() {
   try { return JSON.parse(fs.readFileSync(statePath, 'utf8')); }
-  catch { return { offset: 0, lastRun: 0, transcriptPath: '', findingsCount: 0, docCount: 0, suggestedReflect: false, suggestedDocs: false }; }
+  catch { return { offset: 0, lastRun: 0, transcriptPath: '', findingsCount: 0, docCount: 0, suggestedReflect: false, suggestedDocs: false, parseErrors: 0, lastParseError: null }; }
 }
 
 function saveState(state) {
@@ -167,13 +167,13 @@ function callAPI(apiKey, conversationText) {
           const text = parsed.content?.[0]?.text || '';
           resolve(parseFindings(text));
         } catch {
-          resolve([]);
+          resolve({ findings: [], phase: null, parseError: true });
         }
       });
     });
 
-    req.on('error', () => resolve({ findings: [], phase: null }));
-    req.setTimeout(15000, () => { req.destroy(); resolve({ findings: [], phase: null }); });
+    req.on('error', () => resolve({ findings: [], phase: null, parseError: true }));
+    req.setTimeout(15000, () => { req.destroy(); resolve({ findings: [], phase: null, parseError: true }); });
     req.write(body);
     req.end();
   });
@@ -328,6 +328,10 @@ async function main() {
   // Current phase (updated after LLM call)
   let currentPhase = newSession ? null : (state.phase || null);
 
+  // parseErrors/lastParseError accumulate across sessions (observability)
+  let parseErrors = state.parseErrors || 0;
+  let lastParseError = state.lastParseError || null;
+
   // Save state (counters updated after analysis below)
   const persistState = () => saveState({
     offset: newOffset,
@@ -338,6 +342,8 @@ async function main() {
     suggestedReflect,
     suggestedDocs,
     phase: currentPhase,
+    parseErrors,
+    lastParseError,
   });
 
   // Need minimum messages to analyze
@@ -349,7 +355,13 @@ async function main() {
 
   // Analyze with LLM
   const conversationText = buildConversationText(messages);
-  const { findings, phase } = await callLLM(conversationText);
+  const llmResult = await callLLM(conversationText);
+  const { findings, phase } = llmResult;
+  if (llmResult.parseError) {
+    parseErrors += 1;
+    lastParseError = new Date().toISOString();
+    log.info('watcher parse error', { total: parseErrors, last: lastParseError });
+  }
 
   // Track phase transitions
   if (phase) currentPhase = phase;
