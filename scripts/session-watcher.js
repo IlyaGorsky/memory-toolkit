@@ -415,6 +415,7 @@ async function main() {
 if (require.main === module) {
   // Initialize runtime state only when run as main
   try { stdinPayload = JSON.parse(fs.readFileSync(0, 'utf8')); } catch {}
+  log.setSessionId(stdinPayload.session_id);
   memoryDir = findMemoryDirOrExit();
   statePath = path.join(memoryDir, '.watcher-state.json');
   main().catch(() => exitJson());

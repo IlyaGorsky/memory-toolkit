@@ -23,6 +23,8 @@ try { stdin = fs.readFileSync(0, 'utf8'); } catch {}
 let payload = {};
 try { payload = JSON.parse(stdin); } catch { process.exit(0); }
 
+log.setSessionId(payload.session_id);
+
 const prompt = (payload.prompt || '').trim();
 if (!prompt.startsWith('/')) process.exit(0);
 

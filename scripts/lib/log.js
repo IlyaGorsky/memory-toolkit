@@ -27,6 +27,11 @@ function resolveLogFile() {
 const LOG_FILE = resolveLogFile();
 let fileSinkBroken = false;
 
+let sessionId = null;
+function setSessionId(id) {
+  if (typeof id === 'string' && id && id !== 'unknown') sessionId = id;
+}
+
 function writeFileSink(line) {
   if (!LOG_FILE || fileSinkBroken) return;
   try {
@@ -41,6 +46,7 @@ function writeFileSink(line) {
 function log(level, msg, data) {
   if (LEVELS[level] < (LEVEL in LEVELS ? LEVELS[LEVEL] : 1)) return;
   const entry = { ts: new Date().toISOString(), v: VERSION, level, msg };
+  if (sessionId) entry.sessionId = sessionId;
   if (data) Object.assign(entry, data);
   const line = JSON.stringify(entry) + '\n';
   process.stderr.write(line);
@@ -52,4 +58,5 @@ module.exports = {
   info: (msg, data) => log('info', msg, data),
   warn: (msg, data) => log('warn', msg, data),
   error: (msg, data) => log('error', msg, data),
+  setSessionId,
 };

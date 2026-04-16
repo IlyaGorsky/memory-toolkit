@@ -22,6 +22,8 @@ try {
   transcriptPath = data.transcript_path || '';
 } catch {}
 
+log.setSessionId(sessionId);
+
 const cwd = process.cwd();
 const memoryDir = findMemoryDirOrExit();
 log.debug('session-log start', { sessionId, transcriptPath, cwd, memoryDir });

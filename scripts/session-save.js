@@ -17,6 +17,8 @@ try {
   sessionId = data.session_id || 'unknown';
 } catch {}
 
+log.setSessionId(sessionId);
+
 const cwd = process.cwd();
 const memoryDir = findMemoryDirOrExit();
 
