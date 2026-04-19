@@ -190,4 +190,3 @@ Open items being worked on:
 
 - [README.md](README.md) — features, installation, use cases
 - [PHILOSOPHY.md](PHILOSOPHY.md) — design principles, why no vector DB, why markdown
-- [RESEARCH.md](RESEARCH.md) — prior art, comparisons, design references
