@@ -36,6 +36,22 @@ node "$MEM" --dir="$MEM_DIR" note "CONFIG: backlog_target=<chosen path or github
 
 Read current backlog to avoid duplicates.
 
+## 1b. Collect watcher auto-findings
+
+The session watcher captures decisions, plans, corrections, and phase changes in real time. Review them before analyzing manually — many candidates for backlog / DOC notes are already surfaced:
+
+```bash
+node "$MEM" --dir="$MEM_DIR" findings
+```
+
+Output groups entries by type (`decision`, `plan`, `correction`, `phase`). Treat them as candidates, not authoritative:
+- **correction** — strong candidate for `feedback/` memory
+- **decision** — candidate for `decisions/` or backlog
+- **plan** — candidate for backlog entry
+- **phase** — context only, usually skip
+
+User confirms which findings promote to backlog / memory in step 3.
+
 ## 2. Analyze session
 
 Review what happened and find:

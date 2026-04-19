@@ -522,6 +522,44 @@ describe('memory.js', () => {
     });
   });
 
+  describe('findings', () => {
+    it('collects WATCH: entries from daily notes', () => {
+      writeFile('notes/2026-04-09.md', '---\nname: Notes\ntype: project\n---\n\n- 14:22 WATCH:DECISION: Hybrid Opus+Sonnet for AP-42\n- 14:22 WATCH:PLAN: 4-phase execution\n- 14:22 WATCH:CORRECTION: Rejected Sonnet-generated test code\n');
+
+      const result = run('findings');
+
+      assert.ok(result.includes('Hybrid Opus+Sonnet'));
+      assert.ok(result.includes('4-phase execution'));
+      assert.ok(result.includes('Rejected Sonnet-generated'));
+    });
+
+    it('groups by lowercase type', () => {
+      writeFile('notes/2026-04-09.md', '---\nname: Notes\ntype: project\n---\n\n- 10:00 WATCH:DECISION: one\n- 11:00 WATCH:DECISION: two\n- 12:00 WATCH:PLAN: three\n- 13:00 WATCH:PHASE implementation\n');
+
+      const result = run('findings');
+
+      assert.ok(result.includes('decision (2)'));
+      assert.ok(result.includes('plan (1)'));
+      assert.ok(result.includes('phase (1)'));
+    });
+
+    it('handles WATCH:PHASE without colon', () => {
+      writeFile('notes/2026-04-09.md', '---\nname: Notes\ntype: project\n---\n\n- 10:00 WATCH:PHASE planning (was: null)\n');
+
+      const result = run('findings');
+
+      assert.ok(result.includes('planning'));
+    });
+
+    it('returns message when no WATCH: entries', () => {
+      writeFile('notes/2026-04-09.md', '---\nname: Notes\ntype: project\n---\n\n- 10:00 DOC: unrelated\n');
+
+      const result = run('findings');
+
+      assert.ok(result.includes('No watcher findings'));
+    });
+  });
+
   describe('docs', () => {
     it('collects DOC: notes from daily notes', () => {
       writeFile('notes/2026-04-09.md', '---\nname: Notes\ntype: project\n---\n\n# 2026-04-09\n\n- 14:30 DOC: testing — integration tests must hit real DB\n- 14:35 some other note\n- 15:00 DOC: api — webhook handlers must be idempotent\n');

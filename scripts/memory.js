@@ -14,6 +14,7 @@
  *   node memory.js list [type]                                       — list files (workstreams|feedback|decisions|profile|reference|notes|all)
  *   node memory.js note <text>                                       — daily note (SESSION_* markers auto-routed to sessions.log)
  *   node memory.js docs                                              — collect DOC: notes from daily notes
+ *   node memory.js findings                                          — collect WATCH: entries (auto-captured decisions/plans/corrections)
  *   node memory.js recurring                                         — recurring feedback patterns
  *   node memory.js reindex                                           — rebuild MEMORY.md index sorted by weight
  *   node memory.js health                                            — dead links, stale, size, dupes
@@ -336,6 +337,53 @@ function printDocs() {
         console.log(`## ${domain} (${items.length})`);
         for (const item of items) {
             console.log(`  ${item.date} ${item.time}  ${item.insight}`);
+        }
+        console.log('');
+    }
+}
+
+// --- Watcher findings (WATCH:DECISION / PLAN / CORRECTION / PHASE) ---
+
+function queryWatchFindings() {
+    const notesDir = DIRS.notes;
+    if (!notesDir || !fs.existsSync(notesDir)) return [];
+
+    const results = [];
+    for (const entry of fs.readdirSync(notesDir).sort()) {
+        if (!entry.endsWith('.md')) continue;
+        const content = fs.readFileSync(path.join(notesDir, entry), 'utf-8');
+        for (const line of content.split('\n')) {
+            const match = line.match(/^- (\d{2}:\d{2}) WATCH:([A-Z]+):?\s*(.+)$/);
+            if (!match) continue;
+            const [, time, type, text] = match;
+            results.push({
+                date: entry.replace('.md', ''),
+                time,
+                type: type.toLowerCase(),
+                text: text.trim(),
+            });
+        }
+    }
+    return results;
+}
+
+function printWatchFindings() {
+    const findings = queryWatchFindings();
+    if (!findings.length) {
+        return console.log('No watcher findings. Either watcher is off or this session had no captures.');
+    }
+
+    const grouped = {};
+    for (const f of findings) {
+        if (!grouped[f.type]) grouped[f.type] = [];
+        grouped[f.type].push(f);
+    }
+
+    console.log(`\n# Watcher findings (${findings.length})\n`);
+    for (const [type, items] of Object.entries(grouped).sort()) {
+        console.log(`## ${type} (${items.length})`);
+        for (const item of items) {
+            console.log(`  ${item.date} ${item.time}  ${item.text}`);
         }
         console.log('');
     }
@@ -843,6 +891,7 @@ const commands = {
     'remove-workstream': removeWorkstream,
     workstreams: listWorkstreams,
     docs: printDocs,
+    findings: printWatchFindings,
     classify,
     'session-activity': printSessionActivity,
     'session-changes': printSessionChanges,
@@ -871,6 +920,7 @@ if (require.main === module) {
         console.log('  list [type]            — list files');
         console.log('  note <text>            — quick note');
         console.log('  docs                   — collect DOC: notes');
+        console.log('  findings               — collect WATCH:DECISION/PLAN/CORRECTION/PHASE entries from daily notes');
         console.log('  classify --items=<f>   — classify items by workstream keywords (JSON in/out)');
         console.log('  session-activity       — current session items since last SESSION_START (JSON)');
         console.log('  session-changes        — git files+commits since session start (JSON)');
@@ -900,6 +950,7 @@ module.exports = {
     DIRS,
     note,
     queryDocs,
+    queryWatchFindings,
     classifyItems,
     sessionActivity,
     sessionChanges,
