@@ -1,4 +1,4 @@
-# Architecture
+RE# Architecture
 
 memory-toolkit is a **layered extension** over Claude Code's native memory subsystem — not a replacement. It inherits CC's 4-type taxonomy, stays compatible with CC's recall selector, and adds layers CC doesn't provide: workstream grouping, explicit continuity, session lifecycle, compaction safety, and a docs promotion pipeline.
 
