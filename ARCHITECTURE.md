@@ -30,18 +30,18 @@ Companion to [README.md](README.md) (what + how to use) and [PHILOSOPHY.md](PHIL
 
 ## What CC provides vs what memory-toolkit adds
 
-| Layer | CC-native | memory-toolkit adds |
-|---|---|---|
-| Taxonomy | `type: user|feedback|project|reference` in frontmatter | Optional `category:` field for semantic subtyping (e.g. `category: decision`, `category: handoff`) |
-| Structure | Flat `memory/*.md` | Subdirs for human navigation — `type:` stays CC-compatible |
-| Recall | `findRelevantMemories.ts` — Sonnet side-query, top-5 per user turn | — (CC handles this; we stay compatible via valid `type:`) |
-| Continuity between boundaries | — | `workstreams/<name>/handoff.md` — explicit savepoint surviving compaction + `/resume` + daily boundaries |
-| Grouping | — | Workstream as namespace + `workstreams.json` keyword aliases for routing |
-| Session lifecycle | — | `/session-start`, `/continue`, `/end`, `/park`, `/reflect`, `/docs-reflect` |
-| Auto-extraction | `extractMemories.ts` — forked-agent background save, gated OFF in public builds | Background watcher (Haiku via `claude -p`), always on when key/CLI available, writes `WATCH:*` markers to `notes/` |
-| Compaction safety | Compaction destroys transcript | `PreCompact` hook captures branch + commit + uncommitted before loss |
-| Docs promotion | — | `DOC:` notes → `/docs-reflect` → `.claude/rules/<domain>.md` |
-| User-facing memory CLI | — | `memory.js` with `search`, `list`, `workstream`, `health`, `docs` commands |
+| Layer | Purpose | CC-native | memory-toolkit adds |
+|---|---|---|---|
+| Taxonomy | Category vocabulary for memory entries | `type: user|feedback|project|reference` in frontmatter | Optional `category:` field for semantic subtyping (e.g. `category: decision`, `category: handoff`) |
+| Structure | Physical layout of memory files on disk | Flat `memory/*.md` | Subdirs for human navigation — `type:` stays CC-compatible |
+| Recall | Which memory files load into context per user turn | `findRelevantMemories.ts` — Sonnet side-query, top-5 per user turn | — (CC handles this; we stay compatible via valid `type:`) |
+| Continuity between boundaries | State that survives session end, compaction, and `/resume` | — | `workstreams/<name>/handoff.md` — explicit savepoint surviving compaction + `/resume` + daily boundaries |
+| Grouping | Namespace for parallel work tracks within one project | — | Workstream as namespace + `workstreams.json` keyword aliases for routing |
+| Session lifecycle | Explicit skills for start/continue/end/reflect ceremonies | — | `/session-start`, `/continue`, `/end`, `/park`, `/reflect`, `/docs-reflect` |
+| Auto-extraction | Background save from transcript into memory files | `extractMemories.ts` — forked-agent background save, gated OFF in public builds | Background watcher (Haiku via `claude -p`), always on when key/CLI available, writes `WATCH:*` markers to `notes/` |
+| Compaction safety | Protection from context destruction when compaction fires | Compaction destroys transcript | `PreCompact` hook captures branch + commit + uncommitted before loss |
+| Docs promotion | Bridge from session findings to repo-level rules | — | `DOC:` notes → `/docs-reflect` → `.claude/rules/<domain>.md` |
+| User-facing memory CLI | Scripting + admin + debugging surface over the memory dir | — | `memory.js` with `search`, `list`, `workstream`, `health`, `docs` commands |
 
 ## Convention: type ↔ directory
 
