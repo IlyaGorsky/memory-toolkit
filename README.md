@@ -57,6 +57,8 @@ memory-toolkit saves the session.
 
 ## How it works
 
+For deeper architectural context — layered model, what's inherited from CC vs what the plugin adds, data flow per session — see [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ### Session lifecycle
 
 ```text
@@ -365,13 +367,17 @@ They're complementary — memory-toolkit for session workflow, claude-mem or cla
 
 - **Background watcher** — requires `ANTHROPIC_API_KEY` or `claude` CLI (Max/Team subscription). No-op if neither is available. Parse-error rate surfaces in `/memory health` if the CLI path degrades.
 
+## Roadmap
+
+- **Web viewer for workstreams / memory / notes** — separate read-only static site to browse workstreams, search memory, see the notes timeline. Planned after soft launch as a standalone package (no runtime coupling with the plugin). Feedback / use cases welcome in [RFC #2](https://github.com/IlyaGorsky/memory-toolkit/issues/2).
+
 ## Philosophy
 
 No vector DB. No external services. No complex setup.
 
 Markdown files, a Node.js script, a Haiku watcher, and Claude Code skills that know how to use them. Your memory stays on your machine, in a format you can read, edit, and version control.
 
-See [PHILOSOPHY.md](PHILOSOPHY.md) for the full rationale.
+See [PHILOSOPHY.md](PHILOSOPHY.md) for the full rationale and [ARCHITECTURE.md](ARCHITECTURE.md) for the layered architecture breakdown.
 
 ## Troubleshooting
 
