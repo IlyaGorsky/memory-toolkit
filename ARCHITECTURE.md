@@ -32,7 +32,7 @@ Companion to [README.md](README.md) (what + how to use) and [PHILOSOPHY.md](PHIL
 
 | Layer | Purpose | CC-native | memory-toolkit adds |
 |---|---|---|---|
-| Taxonomy | Category vocabulary for memory entries | `type: user|feedback|project|reference` in frontmatter | Optional `category:` field for semantic subtyping (e.g. `category: decision`, `category: handoff`) |
+| Taxonomy | Category vocabulary for memory entries | `type:` in frontmatter — one of `user`, `feedback`, `project`, `reference` | Optional `category:` field for semantic subtyping (e.g. `category: decision`, `category: handoff`) |
 | Structure | Physical layout of memory files on disk | Flat `memory/*.md` | Subdirs for human navigation — `type:` stays CC-compatible |
 | Recall | Which memory files load into context per user turn | `findRelevantMemories.ts` — Sonnet side-query, top-5 per user turn | — (CC handles this; we stay compatible via valid `type:`) |
 | Continuity between boundaries | State that survives session end, compaction, and `/resume` | — | `workstreams/<name>/handoff.md` — explicit savepoint surviving compaction + `/resume` + daily boundaries |
