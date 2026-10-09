@@ -48,24 +48,24 @@ describe('session-save.js', () => {
     cleanup(ctx);
   });
 
-  it('creates handoff with session id', () => {
+  it('creates pre-compact snapshot with session id', () => {
     const input = { session_id: 'save-001' };
 
     run(input, ctx.cwd);
 
-    const handoffPath = path.join(ctx.memoryDir, 'workstreams', 'handoff.md');
-    assert.ok(fs.existsSync(handoffPath), 'handoff.md should exist');
+    const handoffPath = path.join(ctx.memoryDir, 'workstreams', 'precompact.md');
+    assert.ok(fs.existsSync(handoffPath), 'precompact.md should exist');
     const content = fs.readFileSync(handoffPath, 'utf8');
     assert.ok(content.includes('Session:** save-001'));
     assert.ok(content.includes('Pre-compact snapshot'));
   });
 
-  it('includes git info in handoff', () => {
+  it('includes git info in snapshot', () => {
     const input = { session_id: 'save-002' };
 
     run(input, ctx.cwd);
 
-    const handoffPath = path.join(ctx.memoryDir, 'workstreams', 'handoff.md');
+    const handoffPath = path.join(ctx.memoryDir, 'workstreams', 'precompact.md');
     const content = fs.readFileSync(handoffPath, 'utf8');
     assert.ok(content.includes('Branch:'));
     assert.ok(content.includes('Last commit:'));
@@ -85,11 +85,21 @@ describe('session-save.js', () => {
     assert.ok(content.includes('uuid:save-003'));
   });
 
+  it('does not touch existing handoff.md', () => {
+    const handoffPath = path.join(ctx.memoryDir, 'workstreams', 'handoff.md');
+    fs.mkdirSync(path.dirname(handoffPath), { recursive: true });
+    fs.writeFileSync(handoffPath, 'real handoff');
+
+    run({ session_id: 'save-004' }, ctx.cwd);
+
+    assert.strictEqual(fs.readFileSync(handoffPath, 'utf8'), 'real handoff');
+  });
+
   it('handles unknown session id', () => {
 
     run({}, ctx.cwd);
 
-    const handoffPath = path.join(ctx.memoryDir, 'workstreams', 'handoff.md');
+    const handoffPath = path.join(ctx.memoryDir, 'workstreams', 'precompact.md');
     const content = fs.readFileSync(handoffPath, 'utf8');
     assert.ok(content.includes('Session:** unknown'));
   });

@@ -711,6 +711,7 @@ describe('memory.js', () => {
       writeFile('MEMORY.md', '# Memory\n');
       writeFile('.watcher-state.json', JSON.stringify({
         parseErrors: 10,
+        cliErrors: 0,
         findingsCount: 2,
         lastParseError: '2026-04-16T05:00:00.000Z',
       }));
@@ -719,6 +720,14 @@ describe('memory.js', () => {
       assert.ok(result.includes('session-watcher'));
       assert.ok(result.includes('10 parse errors'));
       assert.ok(result.includes('83%'));
+    });
+
+    it('legacy state (lifetime parseErrors, no cliErrors) → no warning', () => {
+      writeFile('MEMORY.md', '# Memory\n');
+      writeFile('.watcher-state.json', JSON.stringify({ parseErrors: 258, findingsCount: 0 }));
+
+      const result = run('health');
+      assert.ok(!result.includes('session-watcher'));
     });
 
     it('no watcher warning when parseErrors below threshold', () => {
@@ -741,6 +750,54 @@ describe('memory.js', () => {
 
       const result = run('health');
       assert.ok(!result.includes('session-watcher'));
+    });
+  });
+
+  describe('memory dir without --dir', () => {
+    const PLUGIN_NOTES = path.join(__dirname, '..', 'scripts', 'notes');
+
+    it('symlink memory/memory.js → writes to the symlink dir, not the plugin', () => {
+      writeFile('MEMORY.md', '# Memory\n');
+      const link = path.join(TMP, 'memory.js');
+      fs.symlinkSync(SCRIPT, link);
+      const before = fs.existsSync(PLUGIN_NOTES) ? fs.readdirSync(PLUGIN_NOTES).length : 0;
+
+      execSync(`node "${link}" note "via-symlink"`, { encoding: 'utf8', timeout: 5000 });
+
+      const today = new Date().toISOString().slice(0, 10);
+      const note = fs.readFileSync(path.join(TMP, 'notes', `${today}.md`), 'utf8');
+      assert.ok(note.includes('via-symlink'));
+      const after = fs.existsSync(PLUGIN_NOTES) ? fs.readdirSync(PLUGIN_NOTES).length : 0;
+      assert.equal(after, before);
+    });
+
+    it('empty --dir= is rejected, nothing written to cwd', () => {
+      const cwd = fs.mkdtempSync(path.join(require('os').tmpdir(), 'mt-empty-dir-'));
+      const r = require('child_process').spawnSync(process.execPath, [SCRIPT, '--dir=', 'note', 'x'], { cwd, encoding: 'utf8' });
+      assert.equal(r.status, 1);
+      assert.ok(!fs.existsSync(path.join(cwd, 'notes')));
+      fs.rmSync(cwd, { recursive: true, force: true });
+    });
+
+    it('dir prints a path and exits 1 when memory does not exist; other commands refuse', () => {
+      const home = fs.mkdtempSync(path.join(require('os').tmpdir(), 'mt-home-'));
+      const cwd = fs.mkdtempSync(path.join(require('os').tmpdir(), 'mt-nomem-'));
+      const env = { ...process.env, HOME: home };
+      const dir = require('child_process').spawnSync(process.execPath, [SCRIPT, 'dir'], { cwd, env, encoding: 'utf8' });
+      assert.equal(dir.status, 1);
+      assert.ok(dir.stdout.trim().endsWith(path.join('memory')));
+      const note = require('child_process').spawnSync(process.execPath, [SCRIPT, 'note', 'x'], { cwd, env, encoding: 'utf8' });
+      assert.equal(note.status, 1);
+      fs.rmSync(home, { recursive: true, force: true });
+      fs.rmSync(cwd, { recursive: true, force: true });
+    });
+
+    it('note text with backticks and $() is stored literally', () => {
+      const text = 'run `echo pwned` and $(echo pwned)';
+      require('child_process').execFileSync(process.execPath, [SCRIPT, `--dir=${TMP}`, 'note', text]);
+      const today = new Date().toISOString().slice(0, 10);
+      const note = fs.readFileSync(path.join(TMP, 'notes', `${today}.md`), 'utf8');
+      assert.ok(note.includes(text));
     });
   });
 });

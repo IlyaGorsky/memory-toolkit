@@ -21,8 +21,7 @@ If a workstream argument is provided — skip to Step 3.
 
 ```bash
 MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
-PROJ_KEY=$(pwd | tr '/.' '-' | sed 's/^-//')
-MEM_DIR="$HOME/.claude/projects/-${PROJ_KEY}/memory"
+MEM_DIR=$(node "$MEM" dir)   # walks cwd ancestors — works from a monorepo subdir
 
 # Latest handoff (global; per-workstream fetched in Step 3)
 node "$MEM" --dir="$MEM_DIR" handoff
@@ -86,7 +85,7 @@ git status; git log --oneline -5; git branch --show-current
 **Branch ↔ workstream check:** does branch name contain any keyword from `workstreams.json`?
 
 - Match → skip "Current branch" block in Step 4
-- No match → run `git log <branch> --oneline -10` + `git diff $(git merge-base HEAD origin/main)...HEAD --stat`. Synthesize phase (review iteration / new feature / hotfix). Grep `notes/` for branch name. Surface in Step 4 as branch block + extra focus candidate.
+- No match → run `git log <branch> --oneline -10` + `git diff $(git merge-base HEAD "origin/$(git symbolic-ref --short refs/remotes/origin/HEAD | sed 's|^origin/||')")...HEAD --stat` (default branch, not hardcoded `main`). Synthesize phase (review iteration / new feature / hotfix). Grep `notes/` for branch name. Surface in Step 4 as branch block + extra focus candidate.
 
 If handoff has `lastCommit` ref: show `git log <ref>..HEAD --oneline` (changes since session-end).
 

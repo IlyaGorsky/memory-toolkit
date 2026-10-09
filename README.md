@@ -170,13 +170,16 @@ With plugin — PreCompact hook fires before compaction:
 ```text
 you ──→ work 2h ──→ [PreCompact hook] ──→ [compact] ──→ next session
                             │                                 ▲
-                            ├──→ workstreams/handoff.md       │
+                            ├──→ workstreams/precompact.md    │
                             │    (session_id, branch,         │
                             │     last commit, uncommitted)   │
                             └──→ notes/<today>.md             │
                                                               │
-                  SessionStart hook reads handoff ────────────┘
+                  SessionStart hook reads handoff.md ─────────┘
+                  (+ precompact.md if newer)
                   "here's where we left off"
+
+handoff.md is written only by /session-end — the hook never overwrites it.
 ```
 
 ### Use case 2: Background watcher captures decisions automatically

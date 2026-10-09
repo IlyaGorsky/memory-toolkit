@@ -175,24 +175,26 @@ describe('session-log.js', () => {
 
 describe('session-save.js', () => {
   describe('axis-1: happy path', () => {
-    it('writes handoff.md', () => {
+    it('writes precompact.md', () => {
       withSandbox(({ home, memoryDir, projectDir }) => {
         const r = runHook('session-save.js', payload(), { env: { HOME: home }, cwd: projectDir });
         assert.equal(r.exitCode, 0, r.stderr);
-        assert.ok(fs.existsSync(path.join(memoryDir, 'workstreams', 'handoff.md')));
+        assert.ok(fs.existsSync(path.join(memoryDir, 'workstreams', 'precompact.md')));
       });
     });
 
-    it('overwrites prior handoff', () => {
+    it('keeps prior handoff, overwrites prior snapshot', () => {
       withSandbox({ withPriorSession: true }, ({ home, memoryDir, projectDir }) => {
         const wsDir = path.join(memoryDir, 'workstreams');
         fs.mkdirSync(wsDir, { recursive: true });
-        fs.writeFileSync(path.join(wsDir, 'handoff.md'), '# Old\n');
+        fs.writeFileSync(path.join(wsDir, 'handoff.md'), '# Old handoff\n');
+        fs.writeFileSync(path.join(wsDir, 'precompact.md'), '# Old snapshot\n');
         runHook('session-save.js', payload({ session_id: 'save-new' }),
           { env: { HOME: home }, cwd: projectDir });
-        const content = fs.readFileSync(path.join(wsDir, 'handoff.md'), 'utf8');
-        assert.ok(content.includes('save-new'));
-        assert.ok(!content.includes('Old'));
+        assert.equal(fs.readFileSync(path.join(wsDir, 'handoff.md'), 'utf8'), '# Old handoff\n');
+        const snapshot = fs.readFileSync(path.join(wsDir, 'precompact.md'), 'utf8');
+        assert.ok(snapshot.includes('save-new'));
+        assert.ok(!snapshot.includes('Old snapshot'));
       });
     });
 
@@ -233,13 +235,13 @@ describe('session-save.js', () => {
   describe('axis-3: malformed input', () => {
     const cases = [
       ['non-JSON string', 'not valid json', (memoryDir) => {
-        const c = fs.readFileSync(path.join(memoryDir, 'workstreams', 'handoff.md'), 'utf8');
+        const c = fs.readFileSync(path.join(memoryDir, 'workstreams', 'precompact.md'), 'utf8');
         assert.ok(c.includes('unknown'));
       }],
       ['empty stdin', ''],
       ['truncated JSON', '{"session_id": "trunc'],
       ['missing session_id', JSON.stringify({ foo: 'bar' }), (memoryDir) => {
-        const c = fs.readFileSync(path.join(memoryDir, 'workstreams', 'handoff.md'), 'utf8');
+        const c = fs.readFileSync(path.join(memoryDir, 'workstreams', 'precompact.md'), 'utf8');
         assert.ok(c.includes('unknown'));
       }],
     ];
@@ -764,4 +766,43 @@ describe('axis-9: coexistence with user hook', () => {
       assertUntouched(settingsPath, content);
     });
   });
+});
+
+describe('commit-note.js', () => {
+  const notesOf = (memoryDir) => {
+    const p = path.join(memoryDir, 'notes', `${new Date().toISOString().slice(0, 10)}.md`);
+    return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
+  };
+
+  it('git commit → COMMIT note with last subject', () => {
+    withSandbox(({ home, memoryDir, projectDir }) => {
+      const r = runHook('commit-note.js', JSON.stringify({ cwd: projectDir, tool_input: { command: 'git commit -m init' } }),
+        { env: { HOME: home }, cwd: projectDir });
+      assert.equal(r.exitCode, 0, r.stderr);
+      assert.ok(notesOf(memoryDir).includes('COMMIT:'));
+      assert.ok(notesOf(memoryDir).includes('init'));
+    });
+  });
+
+  it('non-commit Bash command → no note (if-filter ignored by old CC)', () => {
+    withSandbox(({ home, memoryDir, projectDir }) => {
+      runHook('commit-note.js', JSON.stringify({ cwd: projectDir, tool_input: { command: 'git log --grep commit' } }),
+        { env: { HOME: home }, cwd: projectDir });
+      assert.ok(!notesOf(memoryDir).includes('COMMIT:'));
+    });
+  });
+});
+
+describe('nested watcher session (MEMORY_TOOLKIT_NESTED)', () => {
+  for (const hook of ['session-log.js', 'session-save.js']) {
+    it(`${hook} is a silent no-op`, () => {
+      withSandbox(({ home, memoryDir, projectDir }) => {
+        const before = snapshotFS(memoryDir);
+        const r = runHook(hook, payload(), { env: { HOME: home, MEMORY_TOOLKIT_NESTED: '1' }, cwd: projectDir });
+        assert.equal(r.exitCode, 0, r.stderr);
+        assert.equal(r.stdout.trim(), '');
+        assert.deepEqual(diffFS(before, snapshotFS(memoryDir)), diffFS(before, before));
+      });
+    });
+  }
 });

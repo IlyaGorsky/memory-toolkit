@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execSync, execFileSync } = require('child_process');
 const { findMemoryDirOrExit } = require('./lib/find-memory-dir');
 const log = require('./lib/log');
 
@@ -81,10 +81,10 @@ if (fs.existsSync(memoryMdPath)) {
 let healthWarnings = '';
 try {
   const memJs = path.join(__dirname, 'memory.js');
-  const healthOut = execSync(`node "${memJs}" --dir="${memoryDir}" health`, {
+  const healthOut = execFileSync(process.execPath, [memJs, `--dir=${memoryDir}`, 'health', '--brief'], {
     encoding: 'utf8', timeout: 5000,
   }).trim();
-  if (!healthOut.includes('healthy')) {
+  if (/^[✗⚠]/m.test(healthOut)) {
     healthWarnings = healthOut;
   }
 } catch {}
@@ -110,6 +110,15 @@ let context = '';
 const handoffPath = path.join(memoryDir, 'workstreams', 'handoff.md');
 if (fs.existsSync(handoffPath)) {
   context += fs.readFileSync(handoffPath, 'utf8') + '\n';
+}
+// precompact.md newer than handoff → a session compacted without /session-end after it
+const snapshotPath = path.join(memoryDir, 'workstreams', 'precompact.md');
+if (fs.existsSync(snapshotPath)) {
+  const handoffTime = fs.existsSync(handoffPath) ? fs.statSync(handoffPath).mtimeMs : 0;
+  if (fs.statSync(snapshotPath).mtimeMs > handoffTime) {
+    const body = fs.readFileSync(snapshotPath, 'utf8').replace(/^---[\s\S]*?---\n/, '').trim();
+    context += '---\nNewer than handoff (compact without /session-end):\n' + body + '\n';
+  }
 }
 if (healthWarnings) {
   context += '---\nMemory health issues:\n' + healthWarnings + '\n';

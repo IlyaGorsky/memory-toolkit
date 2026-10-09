@@ -32,9 +32,28 @@ const { execSync } = require('child_process');
 const { loadSchema, calculateWeight, incrementHits, rebuildIndex } = require('./lib/weight');
 const log = require('./lib/log');
 
-// Support --dir=<path> for symlink/plugin usage, fallback to __dirname
-const dirArg = process.argv.find(a => a.startsWith('--dir='));
-const MEMORY_DIR = dirArg ? dirArg.split('=')[1] : __dirname;
+// Resolve memory dir: --dir=<path> → symlink location (memory/memory.js → plugin)
+// → project memory found from cwd. Never __dirname: Node resolves symlinks,
+// so __dirname points into the plugin repo and notes would land in scripts/.
+const { findMemoryDir } = require('./lib/find-memory-dir');
+function resolveMemoryDir() {
+    const dirArg = process.argv.find(a => a.startsWith('--dir='));
+    if (dirArg) {
+        const dir = dirArg.slice('--dir='.length);
+        if (!dir) {
+            console.error('memory.js: empty --dir= (memory dir not resolved?)');
+            process.exit(1);
+        }
+        return { dir, exists: true };
+    }
+    const invokedDir = path.dirname(path.resolve(process.argv[1] || ''));
+    if (invokedDir !== __dirname && fs.existsSync(path.join(invokedDir, 'MEMORY.md'))) {
+        return { dir: invokedDir, exists: true };
+    }
+    return findMemoryDir();
+}
+const RESOLVED = resolveMemoryDir();
+const MEMORY_DIR = RESOLVED.dir;
 const IGNORE = ['MEMORY.md', 'memory.js'];
 const DIRS = {
     workstreams: path.join(MEMORY_DIR, 'workstreams'),
@@ -669,15 +688,24 @@ function health() {
         try {
             const ws = JSON.parse(fs.readFileSync(watcherStatePath, 'utf-8'));
             const parseErrors = ws.parseErrors || 0;
+            const cliErrors = ws.cliErrors || 0;
             const findingsCount = ws.findingsCount || 0;
             const total = parseErrors + findingsCount;
             const ratio = total > 0 ? parseErrors / total : 0;
-            if (parseErrors > 5 && ratio > 0.5) {
+            const perSession = 'cliErrors' in ws;
+            if (perSession && parseErrors > 5 && ratio > 0.5) {
                 const lastErr = ws.lastParseError ? ` (last: ${ws.lastParseError})` : '';
                 issues.push({
                     level: 'warn',
                     check: 'watcher-parse-errors',
-                    message: `session-watcher: ${parseErrors} parse errors vs ${findingsCount} findings (${Math.round(ratio * 100)}%)${lastErr}`,
+                    message: `session-watcher: ${parseErrors} parse errors vs ${findingsCount} findings this session (${Math.round(ratio * 100)}%)${lastErr}`,
+                });
+            }
+            if (cliErrors > 5) {
+                issues.push({
+                    level: 'warn',
+                    check: 'watcher-cli-errors',
+                    message: `session-watcher: ${cliErrors} CLI/network failures this session (timeout, exit code or no network)`,
                 });
             }
         } catch {}
@@ -703,9 +731,10 @@ function health() {
     }
     if (infos.length) {
         console.log(`\nℹ ${infos.length} info:`);
+        const brief = process.argv.includes('--brief');
         infos.forEach(i => {
             console.log(`  - ${i.message}`);
-            if (i.files) i.files.forEach(f => console.log(`      ${f}`));
+            if (i.files && !brief) i.files.forEach(f => console.log(`      ${f}`));
         });
     }
 
@@ -900,7 +929,8 @@ const commands = {
     recurring: printRecurring,
     reindex,
     health,
-    dir: () => console.log(MEMORY_DIR),
+    // Prints the path even when memory does not exist yet (bootstrap uses it), exit 1 then
+    dir: () => { console.log(MEMORY_DIR); if (!RESOLVED.exists) process.exitCode = 1; },
 };
 
 // CLI mode
@@ -930,6 +960,9 @@ if (require.main === module) {
         console.log('  reindex                — rebuild MEMORY.md index sorted by weight');
         console.log('  health                 — check memory health (dead links, stale, size, dupes)');
         console.log('  dir                    — memory directory path');
+    } else if (!RESOLVED.exists && cmd !== 'dir') {
+        console.error(`memory.js: no memory for ${process.cwd()} — pass --dir=<path> or run /memory-setup`);
+        process.exit(1);
     } else {
         commands[cmd](...args);
     }

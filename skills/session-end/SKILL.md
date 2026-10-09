@@ -11,6 +11,13 @@ metadata:
 
 Save context before finishing. Three phases: handoff → reflect → docs-reflect.
 
+```bash
+MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
+MEM_DIR=$(node "$MEM" dir)
+```
+
+Write the handoff **after the last commit** of the session (or re-check "What's next" against `git log` before saving) — a handoff written before the final commit misses it.
+
 ## Phase 1: Handoff
 
 ### 1a: Update MEMORY.md

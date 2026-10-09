@@ -25,11 +25,12 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash(git commit*)",
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'node ${CLAUDE_PLUGIN_ROOT}/scripts/memory.js note \"COMMIT: $(git log --oneline -1 2>/dev/null)\"'"
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/commit-note.js",
+            "if": "Bash(git commit*)"
           }
         ]
       },

@@ -14,9 +14,10 @@ Parse `.jsonl` session transcripts and extract structured insights: problems, de
 Resolve memory directory, then find sessions by argument:
 
 ```bash
-GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-PROJ_KEY=$(echo "$GIT_ROOT" | tr '/.' '-' | sed 's/^-//')
-SESSIONS_DIR="$HOME/.claude/projects/-${PROJ_KEY}/"
+MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
+MEM_DIR=$(node "$MEM" dir)
+# Transcripts are stored per launch cwd (a monorepo subdir gets its own dir), memory per ancestor
+SESSIONS_DIR="$HOME/.claude/projects/-$(pwd | tr '/.' '-' | sed 's/^-//')/"
 ```
 
 - **Ticket/keyword** — grep across all `.jsonl` files

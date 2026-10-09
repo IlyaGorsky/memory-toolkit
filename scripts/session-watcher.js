@@ -15,7 +15,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const https = require('https');
 const { findMemoryDirOrExit } = require('./lib/find-memory-dir');
 const log = require('./lib/log');
@@ -23,7 +23,7 @@ const log = require('./lib/log');
 // --- Config ---
 const THROTTLE_MS = 3 * 60 * 1000; // run at most every 3 minutes
 const MIN_NEW_MESSAGES = 6;          // need at least 6 new messages to analyze
-const MODEL = 'claude-haiku-4-5-20251001';
+const MODEL = 'claude-haiku-5-5';
 const MAX_TOKENS = 1024;
 const SUGGEST_REFLECT_THRESHOLD = 8;  // suggest /reflect after N accumulated findings
 const SUGGEST_DOCS_THRESHOLD = 3;     // suggest /docs-reflect after N DOC findings
@@ -35,7 +35,7 @@ let statePath = '';
 
 function loadState() {
   try { return JSON.parse(fs.readFileSync(statePath, 'utf8')); }
-  catch { return { offset: 0, lastRun: 0, transcriptPath: '', findingsCount: 0, docCount: 0, suggestedReflect: false, suggestedDocs: false, parseErrors: 0, lastParseError: null }; }
+  catch { return { offset: 0, lastRun: 0, transcriptPath: '', findingsCount: 0, docCount: 0, suggestedReflect: false, suggestedDocs: false, parseErrors: 0, cliErrors: 0, lastParseError: null }; }
 }
 
 function saveState(state) {
@@ -172,8 +172,8 @@ function callAPI(apiKey, conversationText) {
       });
     });
 
-    req.on('error', () => resolve({ findings: [], phase: null, parseError: true }));
-    req.setTimeout(15000, () => { req.destroy(); resolve({ findings: [], phase: null, parseError: true }); });
+    req.on('error', () => resolve({ findings: [], phase: null, parseError: false, cliError: true }));
+    req.setTimeout(15000, () => { req.destroy(); resolve({ findings: [], phase: null, parseError: false, cliError: true }); });
     req.write(body);
     req.end();
   });
@@ -212,19 +212,31 @@ function extractStructuredOutput(stdout) {
 function callCLI(conversationText) {
   try {
     const prompt = `${ANALYSIS_PROMPT}\n\n---\n\n${conversationText}`;
-    const stdout = execSync(
+    // Nested session must stay a plain completion: no tools/MCP (it wandered
+    // the codebase and hit the timeout), no transcript, no plugin hooks (they
+    // logged phantom sessions into foreign memory). --bare is not usable: it drops OAuth.
+    const cwd = path.join(os.tmpdir(), 'memory-toolkit-watcher');
+    fs.mkdirSync(cwd, { recursive: true });
+    const stdout = execFileSync(
+      'claude',
       [
-        'claude -p',
-        '--model claude-haiku-4-5-20251001',
-        '--output-format json',
-        `--json-schema '${JSON.stringify(FINDINGS_SCHEMA)}'`,
+        '-p',
+        '--model', MODEL,
+        '--output-format', 'json',
+        '--json-schema', JSON.stringify(FINDINGS_SCHEMA),
         '--disable-slash-commands',
-      ].join(' '),
-      { input: prompt, timeout: 30000, encoding: 'utf8', maxBuffer: 1024 * 1024, cwd: os.tmpdir() }
+        '--no-session-persistence',
+        '--strict-mcp-config',
+        '--tools', '',
+      ],
+      {
+        input: prompt, timeout: 30000, encoding: 'utf8', maxBuffer: 1024 * 1024, cwd,
+        env: { ...process.env, MEMORY_TOOLKIT_NESTED: '1' },
+      }
     );
     return extractStructuredOutput(stdout);
   } catch {
-    return { findings: [], phase: null, parseError: true };
+    return { findings: [], phase: null, parseError: false, cliError: true };
   }
 }
 
@@ -266,16 +278,18 @@ function saveFindings(findings) {
   }
 
   for (const f of findings) {
-    const summary = (f.summary || '').replace(/"/g, '\\"').slice(0, 200);
+    const summary = (f.summary || '').slice(0, 400);
     // documentation findings use DOC: prefix so /docs-reflect can collect them
     const label = f.type === 'documentation' ? 'DOC' : `WATCH:${f.type.toUpperCase()}`;
-    try {
-      execSync(
-        `node "${memJs}" --dir="${memoryDir}" note "${label}: ${summary}"`,
-        { timeout: 5000, stdio: 'ignore' }
-      );
-    } catch {}
+    writeNote(memJs, `${label}: ${summary}`);
   }
+}
+
+// No shell: summaries come from the transcript and may contain `…` or $(…)
+function writeNote(memJs, text) {
+  try {
+    execFileSync(process.execPath, [memJs, `--dir=${memoryDir}`, 'note', text], { timeout: 5000, stdio: 'ignore' });
+  } catch {}
 }
 
 function findMemoryJs() {
@@ -328,9 +342,12 @@ async function main() {
   // Current phase (updated after LLM call)
   let currentPhase = newSession ? null : (state.phase || null);
 
-  // parseErrors/lastParseError accumulate across sessions (observability)
-  let parseErrors = state.parseErrors || 0;
-  let lastParseError = state.lastParseError || null;
+  // Per session, same base as findingsCount; cliErrors = timeout/exit/network, not bad JSON
+  // State without cliErrors predates per-session counting: its parseErrors is a lifetime total
+  const legacyState = !('cliErrors' in state);
+  let parseErrors = newSession || legacyState ? 0 : (state.parseErrors || 0);
+  let cliErrors = newSession ? 0 : (state.cliErrors || 0);
+  let lastParseError = newSession ? null : (state.lastParseError || null);
 
   // Save state (counters updated after analysis below)
   const persistState = () => saveState({
@@ -343,6 +360,7 @@ async function main() {
     suggestedDocs,
     phase: currentPhase,
     parseErrors,
+    cliErrors,
     lastParseError,
   });
 
@@ -362,6 +380,10 @@ async function main() {
     lastParseError = new Date().toISOString();
     log.info('watcher parse error', { total: parseErrors, last: lastParseError });
   }
+  if (llmResult.cliError) {
+    cliErrors += 1;
+    log.info('watcher cli error', { total: cliErrors });
+  }
 
   // Track phase transitions
   if (phase) currentPhase = phase;
@@ -371,13 +393,7 @@ async function main() {
     // Save phase transition as a note
     const memJs = findMemoryJs();
     if (memJs) {
-      try {
-        const label = `WATCH:PHASE ${phase}` + (prevPhase ? ` (was: ${prevPhase})` : '');
-        execSync(
-          `node "${memJs}" --dir="${memoryDir}" note "${label}"`,
-          { timeout: 5000, stdio: 'ignore' }
-        );
-      } catch {}
+      writeNote(memJs, `WATCH:PHASE ${phase}` + (prevPhase ? ` (was: ${prevPhase})` : ''));
     }
   }
 

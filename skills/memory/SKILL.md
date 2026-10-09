@@ -12,16 +12,11 @@ argument-hint: "<command> [args] [--brief] — search <query> | workstream <name
 ## Step 0: Resolve memory directory
 
 ```bash
-# Claude Code uses git root (not cwd) and replaces / and . with - for project key
-GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-PROJ_KEY=$(echo "$GIT_ROOT" | tr '/.' '-' | sed 's/^-//')
-MEM_DIR="$HOME/.claude/projects/-${PROJ_KEY}/memory"
+MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
+MEM_DIR=$(node "$MEM" dir)   # walks cwd ancestors; exits 1 if no memory yet
 ```
 
-Resolve `memory.js`:
-```bash
-MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
-```
+Always pass `--dir="$MEM_DIR"` to `memory.js` calls.
 
 ---
 

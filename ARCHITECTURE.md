@@ -160,7 +160,7 @@ Enables scripting, CI health checks, debugging, and admin — without going thro
 4. Compaction approaches (context gets big):
 
    PreCompact hook fires:
-   └─ session-save.js writes workstreams/<name>/handoff.md with
+   └─ session-save.js writes workstreams/precompact.md (never handoff.md) with
       branch + commit SHA + uncommitted files + session decisions
 
 5. User runs /session-end:

@@ -50,7 +50,8 @@ type: project
 3. **Quick note** — if the idea is raw and has no structure:
 
 ```bash
-node $MEM/memory.js note "{essence of the idea}"
+MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
+node "$MEM" --dir="$(node "$MEM" dir)" note "{essence of the idea}"
 ```
 
 ## Step 3: Propose & confirm

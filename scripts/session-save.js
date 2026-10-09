@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Auto-save session state before compact.
-// Called by PreCompact hook — saves handoff to memory.
+// Called by PreCompact hook — saves a snapshot next to handoff.md.
+// Never overwrites handoff.md: that file is written by /session-end and
+// carries the real context; a git-only stub in its place loses it.
 // Lightweight version of /session-end (no LLM, no interaction).
 
 const fs = require('fs');
@@ -23,7 +25,7 @@ const cwd = process.cwd();
 const memoryDir = findMemoryDirOrExit();
 
 const handoffDir = path.join(memoryDir, 'workstreams');
-const handoffPath = path.join(handoffDir, 'handoff.md');
+const snapshotPath = path.join(handoffDir, 'precompact.md');
 
 // Gather state
 let branch = 'unknown';
@@ -37,11 +39,11 @@ try {
 
 const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-// Write handoff
+// Write snapshot
 fs.mkdirSync(handoffDir, { recursive: true });
 
-const handoff = `---
-name: Session handoff (auto-saved before compact)
+const snapshot = `---
+name: Pre-compact snapshot
 description: Auto-saved at ${now}
 type: project
 ---
@@ -53,12 +55,12 @@ type: project
 **Last commit:** ${lastCommit}
 **Uncommitted files:** ${uncommitted}
 
-_This handoff was auto-saved by PreCompact hook. Use /session-continue to resume._
+_Auto-saved by PreCompact hook. Context lives in handoff.md (written by /session-end)._
 `;
 
-const handoffTmp = handoffPath + '.tmp';
-fs.writeFileSync(handoffTmp, handoff, 'utf8');
-fs.renameSync(handoffTmp, handoffPath); // atomic on POSIX
+const snapshotTmp = snapshotPath + '.tmp';
+fs.writeFileSync(snapshotTmp, snapshot, 'utf8');
+fs.renameSync(snapshotTmp, snapshotPath); // atomic on POSIX
 
 // Also log to daily notes
 const notesDir = path.join(memoryDir, 'notes');
@@ -74,4 +76,4 @@ if (fs.existsSync(notePath)) {
   fs.writeFileSync(notePath, `---\nname: Notes ${today}\ndescription: Session notes ${today}\ntype: project\n---\n\n# ${today}\n\n${entry}`);
 }
 
-log.info('handoff saved', { path: handoffPath, sessionId, branch, uncommitted });
+log.info('pre-compact snapshot saved', { path: snapshotPath, sessionId, branch, uncommitted });

@@ -32,12 +32,13 @@ function memoryDirFor(absPath) {
 // its sanitization formula after the memory dir was created.
 function globFallback(cwd) {
   if (!fs.existsSync(PROJECTS_ROOT)) return null;
-  const leaf = path.basename(cwd).toLowerCase();
-  if (!leaf) return null;
+  // Whole trailing segment only: substring match sent /tmp to "-private-tmp-claude-bridge-…"
+  const leaf = sanitize(path.basename(cwd)).toLowerCase();
+  if (leaf.length < 3) return null;
   try {
     const entries = fs.readdirSync(PROJECTS_ROOT);
     for (const entry of entries) {
-      if (!entry.toLowerCase().includes(leaf)) continue;
+      if (!entry.toLowerCase().endsWith(`-${leaf}`)) continue;
       const candidate = path.join(PROJECTS_ROOT, entry, 'memory');
       if (fs.existsSync(path.join(candidate, 'MEMORY.md'))) {
         return candidate;
@@ -73,7 +74,10 @@ function findMemoryDir(cwd = process.cwd()) {
 
 // For hook scripts: return the dir if it exists, else exit(0) silently.
 // Hooks must not crash if memory isn't set up yet.
+// Also exits inside the watcher's nested `claude -p`: its hooks must not
+// log sessions or write notes into whatever memory its cwd resolves to.
 function findMemoryDirOrExit() {
+  if (process.env.MEMORY_TOOLKIT_NESTED) process.exit(0);
   const { dir, exists } = findMemoryDir();
   if (!exists) process.exit(0);
   return dir;

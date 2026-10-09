@@ -15,8 +15,7 @@ Pick up a workstream without a full cold start. For cases when you know what you
 
 ```bash
 MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
-PROJ_KEY=$(pwd | tr '/.' '-' | sed 's/^-//')
-MEM_DIR="$HOME/.claude/projects/-${PROJ_KEY}/memory"
+MEM_DIR=$(node "$MEM" dir)
 node "$MEM" --dir="$MEM_DIR" handoff "${1:-}"
 ```
 
@@ -74,7 +73,7 @@ Do NOT load the entire memory — only what's relevant.
 ## Step 5: Mark
 
 ```bash
-node $MEM_DIR/memory.js note "SESSION_CONTINUE branch:$(git branch --show-current) workstream:{name}"
+node "$MEM" --dir="$MEM_DIR" note "SESSION_CONTINUE branch:$(git branch --show-current) workstream:{name}"
 ```
 
 ---
