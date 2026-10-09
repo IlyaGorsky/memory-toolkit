@@ -50,7 +50,7 @@ phases:
     when: "user confirmed handoff"
     description: Write workstreams/handoff.md
     steps:
-      - description: "Write confirmed handoff_content to $MEM_DIR/workstreams/handoff.md"
+      - description: "Write confirmed handoff_content to <memory dir>/workstreams/handoff.md (path: node \"${CLAUDE_PLUGIN_ROOT}/scripts/memory.js\" dir)"
 
   - id: reflect-cascade
     depends: [memory-scan]
@@ -65,7 +65,7 @@ phases:
     depends: [memory-scan]
     description: Count DOC notes accumulated this session
     steps:
-      - run: "node \"$MEM\" --dir=\"$MEM_DIR\" docs | grep -c '^DOC:' || echo 0"
+      - run: "node \"${CLAUDE_PLUGIN_ROOT}/scripts/memory.js\" docs | grep -c '^DOC:' || echo 0"
     output: "{ docs_count: N }"
 
   - id: docs-cascade
@@ -81,7 +81,7 @@ phases:
     depends: [handoff-write, reflect-cascade, docs-cascade]
     description: Mark session end in memory
     steps:
-      - run: "node \"$MEM\" --dir=\"$MEM_DIR\" note \"SESSION_END branch:$(git branch --show-current)\""
+      - run: "node \"${CLAUDE_PLUGIN_ROOT}/scripts/memory.js\" note \"SESSION_END branch:$(git branch --show-current)\""
 
   - id: report
     depends: [session-marker]

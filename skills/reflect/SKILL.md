@@ -13,7 +13,7 @@ Analyze current session and propose additions to the project backlog.
 
 Check memory for saved preference:
 ```bash
-node "$MEM" --dir="$MEM_DIR" search "backlog_target"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" search "backlog_target"
 ```
 
 If no saved preference — detect automatically:
@@ -31,7 +31,7 @@ Where do you track backlog?
 
 Save preference:
 ```bash
-node "$MEM" --dir="$MEM_DIR" note "CONFIG: backlog_target=<chosen path or github-issues>"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" note "CONFIG: backlog_target=<chosen path or github-issues>"
 ```
 
 Read current backlog to avoid duplicates.
@@ -41,7 +41,7 @@ Read current backlog to avoid duplicates.
 The session watcher captures decisions, plans, corrections, and phase changes in real time. Review them before analyzing manually — many candidates for backlog / DOC notes are already surfaced:
 
 ```bash
-node "$MEM" --dir="$MEM_DIR" findings
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" findings
 ```
 
 Output groups entries by type (`decision`, `plan`, `correction`, `phase`). Treat them as candidates, not authoritative:
@@ -67,7 +67,7 @@ Review what happened and find:
 For each insight, ask: "Should any contributor to this project know this?" If yes — it's a DOC, not just a backlog item or feedback. Save it immediately:
 
 ```bash
-node "$MEM" --dir="$MEM_DIR" note "DOC: <domain> — <insight>"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" note "DOC: <domain> — <insight>"
 ```
 
 Examples of what IS a DOC:
@@ -107,13 +107,13 @@ Update the backlog target:
 
 Also save insights to memory (included in the same confirmation — no separate prompt needed):
 ```bash
-node "$MEM" note "REFLECT: <key insight from session>"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" note "REFLECT: <key insight from session>"
 ```
 
 ## 5. Check DOC: notes
 
 ```bash
-node "$MEM" --dir="$MEM_DIR" docs
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" docs
 ```
 
 If DOC: notes exist — notify user: "Found N documentation findings. Run /docs-reflect to process them, or /session-end will handle it."

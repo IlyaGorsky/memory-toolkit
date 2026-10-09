@@ -18,13 +18,13 @@ Two sources: DOC: notes from the current session, and recurring feedback from me
 ### 1a: DOC: notes
 
 ```bash
-node "$MEM" --dir="$MEM_DIR" docs
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" docs
 ```
 
 ### 1b: Recurring feedback patterns
 
 ```bash
-node "$MEM" --dir="$MEM_DIR" recurring
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" recurring
 ```
 
 This scans `feedback/` files for clusters — similar corrections that appeared 2+ times across sessions. Recurring patterns are strong candidates for promotion to `.claude/rules/`.
@@ -34,7 +34,7 @@ This scans `feedback/` files for clusters — similar corrections that appeared 
 If both sources are empty — tell user "No documentation findings." and stop.
 
 If recurring patterns found (3+ occurrences) — these are project conventions, not personal preferences. Treat them as DOC automatically:
-- Save as DOC note: `node "$MEM" --dir="$MEM_DIR" note "DOC: <domain> — <generalized rule from recurring feedback>"`
+- Save as DOC note: `node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" note "DOC: <domain> — <generalized rule from recurring feedback>"`
 - Highlight to user: "This feedback appeared N times — promoting to project rule."
 
 Patterns with 2 occurrences — mention as candidates but don't auto-promote.
@@ -73,7 +73,7 @@ ls docs/ 2>/dev/null
 
 Check memory for saved preference:
 ```bash
-node "$MEM" --dir="$MEM_DIR" search "docs_target"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" search "docs_target"
 ```
 
 ### 3b: Choose target
@@ -92,7 +92,7 @@ Choice? (default: 1)
 
 Save preference:
 ```bash
-node "$MEM" --dir="$MEM_DIR" note "CONFIG: docs_target=<chosen path>"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" note "CONFIG: docs_target=<chosen path>"
 ```
 
 ### 3c: Route by domain

@@ -12,11 +12,10 @@ argument-hint: "<command> [args] [--brief] — search <query> | workstream <name
 ## Step 0: Resolve memory directory
 
 ```bash
-MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
-MEM_DIR=$(node "$MEM" dir)   # walks cwd ancestors; exits 1 if no memory yet
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" dir   # walks cwd ancestors; prints the path, exits 1 if no memory yet
 ```
 
-Always pass `--dir="$MEM_DIR"` to `memory.js` calls.
+`memory.js` resolves the memory dir from cwd itself — no `--dir` needed. Each bash block runs in a fresh shell, so do not rely on variables set in another block.
 
 ---
 
@@ -24,8 +23,8 @@ Always pass `--dir="$MEM_DIR"` to `memory.js` calls.
 
 Bootstrap for this project:
 
-1. Create memory dir: `mkdir -p "$MEM_DIR"`
-2. Do NOT copy `memory.js` if the plugin is installed — use `$MEM` resolved above. Only copy if plugin is not installed and no `$MEM` found.
+1. Create memory dir: `mkdir -p "$(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" dir)"` (prints the path even when it does not exist yet)
+2. Do NOT copy `memory.js` if the plugin is installed — use `${CLAUDE_PLUGIN_ROOT}/scripts/memory.js`. Only copy if the plugin is not installed.
 3. Ask: "What workstreams does the project have?" → create `workstreams.json`
 4. Ask: "Describe your role in 1-2 sentences" → Profile
 5. Ask: "Key links?" → Reference
@@ -36,7 +35,7 @@ Bootstrap for this project:
 
 ## API
 \```bash
-node {absolute $MEM path} --dir={MEM_DIR} <command>
+node {absolute path to memory.js} <command>
 \```
 
 ## Profile
@@ -74,117 +73,117 @@ node {absolute $MEM path} --dir={MEM_DIR} <command>
 {user links}
 ```
 
-7. Verify: `node "$MEM" --dir="$MEM_DIR" list`
+7. Verify: `node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" list`
 8. "Memory ready. You can start working — `/memory` for lookup."
 
 ---
 
 ## Commands (when initialized)
 
-All commands pass `--dir=$MEM_DIR` to ensure correct memory directory (required when memory.js is a symlink to plugin):
+All commands resolve the memory dir from cwd (or from the symlink location when called as `memory/memory.js`):
 ```bash
-node "$MEM" --dir="$MEM_DIR" <command> [args]
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" <command> [args]
 ```
 
 ### No arguments
 Show workstreams + quick actions:
 ```bash
-node "$MEM" --dir="$MEM_DIR" workstreams
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" workstreams
 ```
 
 ### search <query>
 ```bash
-node "$MEM" --dir="$MEM_DIR" search "<query>"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" search "<query>"
 ```
 Summarize — don't dump raw. Highlight relevant to current task.
 
 ### workstream <name>
 ```bash
-node "$MEM" --dir="$MEM_DIR" workstream "<name>"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" workstream "<name>"
 ```
 
 ### workstreams
 ```bash
-node "$MEM" --dir="$MEM_DIR" workstreams
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" workstreams
 ```
 
 ### add-workstream <name> <keywords...>
 ```bash
-node "$MEM" --dir="$MEM_DIR" add-workstream "<name>" <keywords...>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" add-workstream "<name>" <keywords...>
 ```
 
 ### recent [n]
 ```bash
-node "$MEM" --dir="$MEM_DIR" recent <n>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" recent <n>
 ```
 
 ### decisions [topic]
 ```bash
-node "$MEM" --dir="$MEM_DIR" decisions "<topic>"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" decisions "<topic>"
 ```
 
 ### list [type]
 ```bash
-node "$MEM" --dir="$MEM_DIR" list <type>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" list <type>
 ```
 
 ### note <text>
 ```bash
-node "$MEM" --dir="$MEM_DIR" note "<text>"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" note "<text>"
 ```
 
 ### handoff [<workstream>]
 ```bash
-node "$MEM" --dir="$MEM_DIR" handoff              # global handoff
-node "$MEM" --dir="$MEM_DIR" handoff <workstream> # per-ws (falls back to global)
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" handoff              # global handoff
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" handoff <workstream> # per-ws (falls back to global)
 ```
 Prints `NO_HANDOFF` when neither per-workstream nor global file exists.
 
 ### write-handoff --workstream=<name> --content=<file>
 ```bash
-node "$MEM" --dir="$MEM_DIR" write-handoff --workstream=<name> --content=<path>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" write-handoff --workstream=<name> --content=<path>
 ```
 Atomic write to `workstreams/<name>/handoff.md`. Frontmatter auto-added.
 
 ### classify --items=<json>
 ```bash
-node "$MEM" --dir="$MEM_DIR" classify --items=<path-to-json>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" classify --items=<path-to-json>
 ```
 Keyword-routes items by `workstreams.json`. Multi-label, case-insensitive. Unmatched → `_unassigned`.
 
 ### session-activity
 ```bash
-node "$MEM" --dir="$MEM_DIR" session-activity
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" session-activity
 ```
 Current session's items (and DOC: subset) since last `SESSION_START` marker in today's notes. JSON output.
 
 ### session-changes
 ```bash
-node "$MEM" --dir="$MEM_DIR" session-changes
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" session-changes
 ```
 Git commits + files union since session start. JSON output. Pipe with `session-activity` into `classify` for routing analysis (see `/session-end` Phase 1b).
 
 ### docs
 ```bash
-node "$MEM" --dir="$MEM_DIR" docs
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" docs
 ```
 Collect `DOC:` notes from daily notes for `/docs-reflect`.
 
 ### recurring
 ```bash
-node "$MEM" --dir="$MEM_DIR" recurring
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" recurring
 ```
 Find recurring feedback patterns.
 
 ### reindex
 ```bash
-node "$MEM" --dir="$MEM_DIR" reindex
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" reindex
 ```
 Rebuild MEMORY.md index sorted by weight.
 
 ### health
 ```bash
-node "$MEM" --dir="$MEM_DIR" health
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" health
 ```
 Check for dead links, stale entries, size overflow, duplicates.
 

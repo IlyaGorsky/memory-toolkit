@@ -20,21 +20,20 @@ Quick context entry. Gather state, propose focus.
 If a workstream argument is provided — skip to Step 3.
 
 ```bash
-MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
-MEM_DIR=$(node "$MEM" dir)   # walks cwd ancestors — works from a monorepo subdir
+MEM_DIR=$(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" dir)   # walks cwd ancestors — works from a monorepo subdir
 
 # Latest handoff (global; per-workstream fetched in Step 3)
-node "$MEM" --dir="$MEM_DIR" handoff
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" handoff
 
 # Latest dated note
 ls -t "$MEM_DIR/notes/"*.md 2>/dev/null | head -1 | xargs -I{} head -30 {}
 
 # Workstreams sorted by aggregate weight
-node "$MEM" --dir="$MEM_DIR" workstreams
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" workstreams
 
 # Top-3 brief inline
 for WS in <top-3 from sorted list>; do
-  node "$MEM" --dir="$MEM_DIR" workstream "$WS" --brief | head -15
+  node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" workstream "$WS" --brief | head -15
 done
 ```
 
@@ -67,7 +66,7 @@ Render as table. Top-3 rows show synthesized "What's in" from `--brief`; rest sh
 
 If user picks ➕ — ask name + keywords, then:
 ```bash
-node "$MEM" --dir="$MEM_DIR" add-workstream <name> <keyword1> <keyword2> ...
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" add-workstream <name> <keyword1> <keyword2> ...
 ```
 
 ---
@@ -94,8 +93,8 @@ If handoff has `lastCommit` ref: show `git log <ref>..HEAD --oneline` (changes s
 ## Step 3: Workstream brief
 
 ```bash
-node "$MEM" --dir="$MEM_DIR" handoff <name>      # per-workstream handoff if available
-node "$MEM" --dir="$MEM_DIR" workstream <name> --brief
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" handoff <name>      # per-workstream handoff if available
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" workstream <name> --brief
 ```
 
 Show: open/done task counts, blockers, pickable now. **Do NOT read full files** — full context loads only after task pick in Step 4.
@@ -160,7 +159,7 @@ Agree, pick another candidate, or **start a new workstream**?
 ## Step 5: Session label
 
 ```bash
-node "$MEM" --dir="$MEM_DIR" note "SESSION_START branch:$(git branch --show-current) workstream:<chosen> focus:<task>"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" note "SESSION_START branch:$(git branch --show-current) workstream:<chosen> focus:<task>"
 ```
 
 (Auto-routed to `sessions.log`, not notes.)

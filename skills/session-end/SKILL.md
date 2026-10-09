@@ -11,10 +11,7 @@ metadata:
 
 Save context before finishing. Three phases: handoff → reflect → docs-reflect.
 
-```bash
-MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
-MEM_DIR=$(node "$MEM" dir)
-```
+Memory commands: `node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" <command>` — the memory dir is resolved from cwd; `… dir` prints it.
 
 Write the handoff **after the last commit** of the session (or re-check "What's next" against `git log` before saving) — a handoff written before the final commit misses it.
 
@@ -32,12 +29,12 @@ Check what is current:
 Classify session activity by workstream — preview, not yet written (AP-24).
 
 ```bash
-node "$MEM" --dir="$MEM_DIR" session-activity > /tmp/activity.json
-node "$MEM" --dir="$MEM_DIR" session-changes > /tmp/changes.json
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" session-activity > /tmp/activity.json
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" session-changes > /tmp/changes.json
 
 # Combine items + file paths + commit subjects into one array for classify
 jq -s '[.[0].items[], .[1].commits[], .[1].files[]]' /tmp/activity.json /tmp/changes.json > /tmp/items.json
-node "$MEM" --dir="$MEM_DIR" classify --items=/tmp/items.json
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" classify --items=/tmp/items.json
 ```
 
 Show user a compact routing table:
@@ -94,7 +91,7 @@ On confirm, write in two layers:
    ```bash
    # Compose per-workstream slice (relevant What-was-done / What's-next / decisions).
    # Save to /tmp/<ws>-handoff.md, then:
-   node "$MEM" --dir="$MEM_DIR" write-handoff --workstream=<ws> --content=/tmp/<ws>-handoff.md
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" write-handoff --workstream=<ws> --content=/tmp/<ws>-handoff.md
    ```
 
 2. **Global handoff** — write `workstreams/handoff.md` (overall summary + cross-refs):
@@ -121,7 +118,7 @@ Session analysis — run /reflect:
 Check DOC: labels from the session:
 
 ```bash
-node "$MEM" --dir="$MEM_DIR" docs
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" docs
 ```
 
 If DOC: labels found — run /docs-reflect:

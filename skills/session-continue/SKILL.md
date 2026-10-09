@@ -14,9 +14,7 @@ Pick up a workstream without a full cold start. For cases when you know what you
 ## Step 1: Find handoff
 
 ```bash
-MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
-MEM_DIR=$(node "$MEM" dir)
-node "$MEM" --dir="$MEM_DIR" handoff "${1:-}"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" handoff "$ARGUMENTS"
 ```
 
 Falls back to global handoff if no per-workstream file exists. Prints `NO_HANDOFF` when neither found.
@@ -64,7 +62,7 @@ If the user confirmed — load only what's needed for the next step:
 
 - The file that was last edited
 - Task plan if available
-- Last 3 feedback entries via `node $MEM search`
+- Last 3 feedback entries via `node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" search`
 
 Do NOT load the entire memory — only what's relevant.
 
@@ -73,7 +71,7 @@ Do NOT load the entire memory — only what's relevant.
 ## Step 5: Mark
 
 ```bash
-node "$MEM" --dir="$MEM_DIR" note "SESSION_CONTINUE branch:$(git branch --show-current) workstream:{name}"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" note "SESSION_CONTINUE branch:$(git branch --show-current) workstream:{name}"
 ```
 
 ---

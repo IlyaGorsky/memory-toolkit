@@ -14,15 +14,13 @@ Parse `.jsonl` session transcripts and extract structured insights: problems, de
 Resolve memory directory, then find sessions by argument:
 
 ```bash
-MEM="${CLAUDE_PLUGIN_ROOT}/scripts/memory.js"
-MEM_DIR=$(node "$MEM" dir)
 # Transcripts are stored per launch cwd (a monorepo subdir gets its own dir), memory per ancestor
 SESSIONS_DIR="$HOME/.claude/projects/-$(pwd | tr '/.' '-' | sed 's/^-//')/"
 ```
 
 - **Ticket/keyword** — grep across all `.jsonl` files
 - **Session ID** — specific file by UUID
-- **Workstream** — use `node "$MEM" --dir="$MEM_DIR" workstream <name>` for context, match by dates/keywords
+- **Workstream** — use `node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" workstream <name>` for context, match by dates/keywords
 - **No argument** — most recent session
 
 ```bash
@@ -31,7 +29,7 @@ grep -l "<query>" "$SESSIONS_DIR"*.jsonl 2>/dev/null | head -10
 
 Also check session index if available:
 ```bash
-cat "$MEM_DIR/sessions.jsonl" 2>/dev/null
+cat "$(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" dir)/sessions.jsonl" 2>/dev/null
 ```
 
 ## Step 2: Extract user messages

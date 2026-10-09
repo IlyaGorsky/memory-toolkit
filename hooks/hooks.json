@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/pipeline-hint.js"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/pipeline-hint.js\""
           }
         ]
       }
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/session-save.js"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-save.js\""
           }
         ]
       }
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/commit-note.js",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/commit-note.js\"",
             "if": "Bash(git commit*)"
           }
         ]
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/session-watcher.js"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-watcher.js\""
           }
         ]
       }
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/session-watcher.js"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-watcher.js\""
           }
         ]
       }
@@ -61,7 +61,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/session-log.js"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-log.js\""
           }
         ]
       }
