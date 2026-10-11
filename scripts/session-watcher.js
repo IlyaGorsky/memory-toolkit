@@ -15,7 +15,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { execFileSync, execSync } = require('child_process');
 const https = require('https');
 const { findMemoryDirOrExit } = require('./lib/find-memory-dir');
 const log = require('./lib/log');
@@ -209,6 +209,19 @@ function extractStructuredOutput(stdout) {
   return { findings: [], phase: null, parseError: true };
 }
 
+// `--json-schema` takes ONE argv entry of inline JSON. Run `claude` through a shell
+// (execSync) rather than execFileSync('claude', …): on Windows `claude` is a
+// `claude.cmd` shim and Node cannot spawn a .cmd with shell:false — it throws
+// `spawnSync claude ENOENT`, so callCLI always failed and the watcher silently saved
+// 0 findings (issue #4). Quoting the schema so it survives BOTH POSIX sh (unwraps
+// `\"`→`"`) and Windows cmd.exe (the CLI's argv parser does the same) keeps a single
+// cross-platform code path; JSON.stringify emits no spaces, so no other shell
+// metacharacters leak. Inputs here are all internal constants (no user data), so
+// there is no shell-injection surface.
+function jsonSchemaArg(schema) {
+  return '"' + JSON.stringify(schema).replace(/"/g, '\\"') + '"';
+}
+
 function callCLI(conversationText) {
   try {
     const prompt = `${ANALYSIS_PROMPT}\n\n---\n\n${conversationText}`;
@@ -217,18 +230,17 @@ function callCLI(conversationText) {
     // logged phantom sessions into foreign memory). --bare is not usable: it drops OAuth.
     const cwd = path.join(os.tmpdir(), 'memory-toolkit-watcher');
     fs.mkdirSync(cwd, { recursive: true });
-    const stdout = execFileSync(
-      'claude',
+    const stdout = execSync(
       [
-        '-p',
+        'claude -p',
         '--model', MODEL,
         '--output-format', 'json',
-        '--json-schema', JSON.stringify(FINDINGS_SCHEMA),
+        '--json-schema', jsonSchemaArg(FINDINGS_SCHEMA),
         '--disable-slash-commands',
         '--no-session-persistence',
         '--strict-mcp-config',
-        '--tools', '',
-      ],
+        '--tools ""',
+      ].join(' '),
       {
         input: prompt, timeout: 30000, encoding: 'utf8', maxBuffer: 1024 * 1024, cwd,
         env: { ...process.env, MEMORY_TOOLKIT_NESTED: '1' },
