@@ -988,27 +988,41 @@ function printSignals(...args) {
 
 // --- Session activity ---
 
+// The SessionStart hook logs SESSION_START again on every resume and compact, and
+// a session can run past midnight. So the session begins at the first marker with
+// its uuid — CLAUDE_CODE_SESSION_ID, else the latest marker's — not at the last one.
+const SESSION_LOOKBACK_FILES = 14;
+
 function sessionActivity() {
+    const result = { session_start: null, session_start_date: null, items: [], docs: [] };
+    const notesDir = DIRS.notes;
+    if (!notesDir || !fs.existsSync(notesDir)) return result;
+
     const today = new Date().toISOString().slice(0, 10);
-    const notePath = path.join(MEMORY_DIR, 'notes', `${today}.md`);
-    const result = { session_start: null, items: [], docs: [] };
-
-    if (!fs.existsSync(notePath)) return result;
-
-    const lines = fs.readFileSync(notePath, 'utf-8').split('\n');
-    const START = /^- (\d{2}:\d{2}) SESSION_START/;
+    const files = fs.readdirSync(notesDir).filter(f => /^\d{4}-\d{2}-\d{2}\.md$/.test(f)).sort().slice(-SESSION_LOOKBACK_FILES);
+    let lines = files.flatMap(f => fs.readFileSync(path.join(notesDir, f), 'utf-8').split('\n')
+        .map(line => ({ date: f.slice(0, 10), line })));
+    const START = /^- (\d{2}:\d{2}) SESSION_START(?: uuid:(\S+))?/;
     const MARKER = /^- \d{2}:\d{2} (SESSION_START|SESSION_END|NEW_WORKSTREAM|DOCS_REVIEWED|WORKSTREAMS_REVIEWED)/;
     const LINE = /^- (\d{2}:\d{2}) (.+)$/;
 
-    let boundaryIdx = -1;
-    for (let i = lines.length - 1; i >= 0; i--) {
-        const m = lines[i].match(START);
-        if (m) { boundaryIdx = i; result.session_start = m[1]; break; }
+    const starts = lines.map((l, i) => [i, l.line.match(START)]).filter(([, m]) => m);
+    const latest = starts[starts.length - 1];
+    const uuid = starts.some(([, m]) => m[2] && m[2] === process.env.CLAUDE_CODE_SESSION_ID)
+        ? process.env.CLAUDE_CODE_SESSION_ID
+        : latest && latest[1][2];
+    const first = uuid ? starts.find(([, m]) => m[2] === uuid) : latest;
+    if (first) {
+        result.session_start = first[1][1];
+        result.session_start_date = lines[first[0]].date;
+        lines = lines.slice(first[0] + 1);
+    } else {
+        lines = lines.filter(l => l.date === today);
     }
 
-    for (let i = boundaryIdx + 1; i < lines.length; i++) {
-        if (MARKER.test(lines[i])) continue;
-        const m = lines[i].match(LINE);
+    for (const { line } of lines) {
+        if (MARKER.test(line)) continue;
+        const m = line.match(LINE);
         if (!m) continue;
         const text = m[2].trim();
         if (!text) continue;
@@ -1033,7 +1047,10 @@ function sessionChanges() {
     };
 
     if (activity.session_start) {
-        const since = activity.session_start;
+        const today = new Date().toISOString().slice(0, 10);
+        const since = activity.session_start_date === today
+            ? activity.session_start
+            : `${activity.session_start_date} ${activity.session_start}`;
         const commits = git(`git log --since="${since}" --pretty=format:"%h %s"`);
         if (commits) result.commits = commits.split('\n').filter(Boolean);
         const commitFiles = git(`git log --since="${since}" --name-only --pretty=format:""`);

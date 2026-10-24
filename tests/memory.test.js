@@ -182,6 +182,45 @@ describe('memory.js', () => {
       assert.deepEqual(out.items, ['current note one', 'current note two']);
     });
 
+    it('starts at the first marker of the session, not the one compact re-logged', () => {
+      writeNote([
+        '- 09:00 SESSION_START uuid:a branch:main',
+        '- 09:10 before compact',
+        '- 10:00 SESSION_START uuid:a branch:main',
+        '- 10:05 after compact',
+      ].join('\n'));
+
+      const out = JSON.parse(run('session-activity'));
+
+      assert.equal(out.session_start, '09:00');
+      assert.deepEqual(out.items, ['before compact', 'after compact']);
+    });
+
+    it('follows a session past midnight', () => {
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      writeFile(`notes/${yesterday}.md`, '- 23:00 SESSION_START uuid:a branch:main\n- 23:30 late decision\n');
+      writeNote('- 00:30 SESSION_START uuid:a branch:main\n- 00:40 after resume');
+
+      const out = JSON.parse(run('session-activity'));
+
+      assert.equal(out.session_start_date, yesterday);
+      assert.deepEqual(out.items, ['late decision', 'after resume']);
+    });
+
+    it('takes the boundary of CLAUDE_CODE_SESSION_ID over a later parallel session', () => {
+      writeNote([
+        '- 09:00 SESSION_START uuid:mine branch:main',
+        '- 09:10 my note',
+        '- 09:30 SESSION_START uuid:other branch:main',
+      ].join('\n'));
+      const runAs = id => JSON.parse(execSync(`node "${SCRIPT}" --dir="${TMP}" session-activity`, {
+        encoding: 'utf8', env: testEnv({ CLAUDE_CODE_SESSION_ID: id }),
+      }));
+
+      assert.equal(runAs('mine').session_start, '09:00');
+      assert.equal(runAs('unknown').session_start, '09:30');
+    });
+
     it('skips the DOCS_REVIEWED marker', () => {
       writeNote([
         '- 10:00 SESSION_START uuid:x branch:main',
