@@ -2,6 +2,7 @@
 // PostToolUse(Bash) hook: log the commit just made as a COMMIT note.
 // hooks.json filters with `if: Bash(git commit*)`, but `if` is best-effort and
 // older Claude Code ignores it — so the command is checked here as well.
+// The note goes to the session's memory, also for a commit made in another repo.
 
 const fs = require('fs');
 const { execFileSync } = require('child_process');

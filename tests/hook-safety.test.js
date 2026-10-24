@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const { testEnv } = require('./helpers/env');
+const { sanitizePath } = require('../scripts/lib/find-memory-dir');
 
 const {
   withSandbox, runHook, assertValidHookStdout, estimateTokens,
@@ -809,6 +810,24 @@ describe('commit-note.js', () => {
       runHook('commit-note.js', JSON.stringify({ cwd: projectDir, tool_input: { command: 'git log --grep commit' } }),
         { env: { HOME: home }, cwd: projectDir });
       assert.ok(!notesOf(memoryDir).includes('COMMIT:'));
+    });
+  });
+
+  it('session cd-ed into another repo → note goes to the session memory (CLAUDE_PROJECT_DIR)', () => {
+    withSandbox(({ home, memoryDir, projectDir, sandboxRoot }) => {
+      const otherDir = path.join(sandboxRoot, 'other');
+      fs.mkdirSync(otherDir);
+      execSync('git init -q && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m other-commit', {
+        cwd: otherDir, env: testEnv(),
+      });
+      const otherMemory = path.join(home, '.claude', 'projects', sanitizePath(otherDir), 'memory');
+      fs.mkdirSync(otherMemory, { recursive: true });
+
+      const r = runHook('commit-note.js', JSON.stringify({ cwd: otherDir, tool_input: { command: 'git commit -m other-commit' } }),
+        { env: { HOME: home, CLAUDE_PROJECT_DIR: projectDir }, cwd: otherDir });
+      assert.equal(r.exitCode, 0, r.stderr);
+      assert.ok(notesOf(memoryDir).includes('other-commit'));
+      assert.equal(notesOf(otherMemory), '');
     });
   });
 });

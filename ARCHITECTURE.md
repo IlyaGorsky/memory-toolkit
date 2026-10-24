@@ -187,6 +187,7 @@ Open items being worked on:
 Resolved:
 
 - **Memory dir resolution alignment with CC** (1.9.16) — `scripts/lib/find-memory-dir.js` follows CC's chain: `CLAUDE_COWORK_MEMORY_PATH_OVERRIDE` → `autoMemoryDirectory` (local, user) → canonical git root (worktrees share the main repo's memory) → CC's `sanitizePath`. It no longer walks above the git root into a parent folder's memory.
+- **Hooks write to the session's memory** (1.9.21) — hooks resolve from `CLAUDE_PROJECT_DIR`, the root the session started in, not from the current directory: a session that `cd`s into another repo no longer writes its notes into that repo's memory.
 - **Watcher subprocess isolation** (1.9.14) — the nested `claude -p` runs with `--no-session-persistence` and `MEMORY_TOOLKIT_NESTED`, so it writes no transcript and the plugin's own hooks are no-ops inside it.
 
 ## See also

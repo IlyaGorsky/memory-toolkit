@@ -156,8 +156,10 @@ function findMemoryDir(cwd = process.cwd()) {
 
 // For hook scripts: return the dir if it exists, else exit(0) silently.
 // Hooks must not crash if memory isn't set up yet.
+// Hooks run in Claude's current directory, which follows `cd` into other repos.
+// CLAUDE_PROJECT_DIR stays at the session root, the folder CC keys memory by.
 function findMemoryDirOrExit() {
-  const { dir, exists } = findMemoryDir();
+  const { dir, exists } = findMemoryDir(process.env.CLAUDE_PROJECT_DIR || process.cwd());
   if (!exists) process.exit(0);
   return dir;
 }
