@@ -2,7 +2,7 @@
 name: memory
 description: Project memory — search, workstreams, notes, decisions. Auto-initializes on first use.
 user-invocable: true
-argument-hint: "<command> [args] [--brief] — search <query> | workstream <name> | workstreams | add-workstream <name> <kw...> | recent [n] | decisions [topic] | list | note <text> | handoff [<ws>]"
+argument-hint: "<command> [args] [--brief] — search <query> | workstream <name> | workstreams | add-workstream <name> <kw...> | recent [n] | decisions [topic] | list | note <text> | handoff [<ws>] | identity <ws> [--material] | unassigned"
 ---
 
 # /memory — Project Memory
@@ -144,6 +144,32 @@ Prints `NO_HANDOFF` when neither per-workstream nor global file exists.
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" write-handoff --workstream=<name> --content=<path>
 ```
 Atomic write to `workstreams/<name>/handoff.md`. Frontmatter auto-added.
+
+### identity <workstream> [--material]
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" identity <workstream>             # the card, or NO_IDENTITY
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" identity <workstream> --material  # + decisions to draft it from
+```
+Identity (`workstreams/<name>/workstream.md`) says what the workstream is, why, and what it doesn't do: What is this / Why / Principles / Not doing / Scope / Status. Draft it from `--material` (decisions, corrections and reflections the watcher already logged), show the draft, write only after the user agrees. Keep it under ~40 lines — history goes to handoff. A flat `workstreams/<name>.md` is read as a legacy card.
+
+### write-identity --workstream=<name> --content=<file>
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" write-identity --workstream=<name> --content=<path>
+```
+Writes `workstreams/<name>/workstream.md`; adds `type: project`, `category: identity` frontmatter if missing.
+
+### unassigned [--days=30]
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" unassigned
+```
+Decisions that match no workstream's keywords, by day — material for proposing a new workstream when a theme recurs.
+
+### signals [--mark-reviewed]
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" signals                  # JSON: identity gaps, new-workstream signal
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" signals --mark-reviewed  # after offering, whatever the answer
+```
+The SessionStart hook turns these into an offer. Workstreams are optional: offer once, then mark reviewed.
 
 ### classify --items=<json>
 ```bash

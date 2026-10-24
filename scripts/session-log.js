@@ -78,9 +78,9 @@ if (fs.existsSync(memoryMdPath)) {
 }
 
 // Run health check
+const memJs = path.join(__dirname, 'memory.js');
 let healthWarnings = '';
 try {
-  const memJs = path.join(__dirname, 'memory.js');
   const healthOut = execFileSync(process.execPath, [memJs, `--dir=${memoryDir}`, 'health', '--brief'], {
     encoding: 'utf8', timeout: 5000,
   }).trim();
@@ -123,6 +123,37 @@ if (fs.existsSync(snapshotPath)) {
 if (healthWarnings) {
   context += '---\nMemory health issues:\n' + healthWarnings + '\n';
 }
+
+// Workstream signals (AP-49): drawn from decisions the watcher already logged, so
+// they reach sessions that never run /session-start. Silent below the thresholds.
+let signals = null;
+try {
+  signals = JSON.parse(execFileSync(process.execPath, [memJs, `--dir=${memoryDir}`, 'signals'], {
+    encoding: 'utf8', timeout: 5000,
+  }));
+} catch {}
+if (signals) {
+  const mem = 'memory.js';
+  const offers = [];
+  const gap = signals.identityGaps[0];
+  if (gap) {
+    offers.push(`"${gap.workstream}" has ${gap.recent} new decisions and ${gap.legacy ? 'only a legacy card' : 'no identity'}. When the conversation touches it, offer a draft built from ${mem} identity ${gap.workstream} --material, and write it with ${mem} write-identity --workstream=${gap.workstream} --content=<file> once the user agrees.`);
+  }
+  if (signals.unassigned.suggest) {
+    offers.push(`${signals.unassigned.items} decisions over ${signals.unassigned.days} days match no workstream. At a natural pause, read ${mem} unassigned; if a theme recurs, offer to create a workstream (${mem} add-workstream <name> <keywords...>, then an identity as above).`);
+  }
+  if (offers.length) {
+    offers.push(`Offer each at most once, and whatever the answer run ${mem} signals --mark-reviewed. Workstreams are optional — never push.`);
+  }
+  const lines = signals.identities.length
+    ? [`Identities: ${signals.identities.map(i => `${i.workstream} — ${i.description}`).join('; ')}. Card: ${mem} identity <name>`, ...offers]
+    : offers;
+  if (lines.length) {
+    context += `---\nWorkstreams (act only when it fits the conversation; memory.js = node "${memJs}" --dir="${memoryDir}"):\n`
+      + lines.map(l => `- ${l}`).join('\n') + '\n';
+  }
+}
+
 context += [
   '---',
   'During this session, mark documentation-worthy findings:',

@@ -333,6 +333,142 @@ describe('memory.js', () => {
     });
   });
 
+  describe('identity', () => {
+    const day = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const NOTE_HEAD = '---\nname: Notes\ntype: project\n---\n\n';
+
+    function workstreams(obj) {
+      fs.writeFileSync(path.join(TMP, 'workstreams.json'), JSON.stringify(obj));
+    }
+    function writeContent(content) {
+      const p = path.join(TMP, 'identity-content.md');
+      fs.writeFileSync(p, content);
+      return p;
+    }
+    // n decision lines about `topic`, one per day, starting `fromDay` days ago
+    function decisions(topic, n, fromDay) {
+      for (let i = 0; i < n; i++) {
+        const file = path.join(TMP, 'notes', `${day(fromDay + i)}.md`);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        if (!fs.existsSync(file)) fs.writeFileSync(file, NOTE_HEAD);
+        fs.appendFileSync(file, `- 10:0${i % 10} WATCH:DECISION: ${topic} decision ${i}\n`);
+      }
+    }
+    const signals = () => JSON.parse(run('signals'));
+
+    it('prints NO_IDENTITY when there is no card', () => {
+      assert.equal(run('identity viewer'), 'NO_IDENTITY');
+    });
+
+    it('write-identity adds identity frontmatter and identity prints it', () => {
+      const out = run(`write-identity --workstream=viewer --content=${writeContent('## What is this\nRead-only viewer\n')}`);
+
+      assert.ok(out.includes('workstreams/viewer/workstream.md'));
+      const printed = run('identity viewer');
+      assert.ok(printed.includes('type: project'));
+      assert.ok(printed.includes('category: identity'));
+      assert.ok(printed.includes('Read-only viewer'));
+    });
+
+    it('reads a legacy flat card', () => {
+      writeFile('workstreams/avito.md', '---\nname: Avito\ndescription: old card\ntype: project\n---\nprototype');
+
+      assert.ok(run('identity avito').includes('prototype'));
+    });
+
+    it('--material lists the decisions routed to the workstream, newest first', () => {
+      workstreams({ viewer: ['viewer'], docs: ['docs-reflect'] });
+      writeFile(`notes/${day(2)}.md`, `${NOTE_HEAD}- 10:00 WATCH:DECISION: viewer stays read-only\n- 10:05 WATCH:DECISION: docs-reflect keeps a marker\n`);
+      writeFile(`notes/${day(1)}.md`, `${NOTE_HEAD}- 09:00 REFLECT: viewer exposed a bug\n- 09:05 WATCH:PLAN: viewer plan is not a decision\n`);
+
+      const out = run('identity viewer --material');
+
+      assert.ok(out.includes('NO_IDENTITY'));
+      assert.ok(out.includes('Decisions, corrections, reflections (2'));
+      assert.ok(out.indexOf('viewer exposed a bug') < out.indexOf('viewer stays read-only'));
+      assert.ok(!out.includes('docs-reflect keeps a marker'));
+      assert.ok(!out.includes('plan is not a decision'));
+    });
+
+    it('unassigned lists decisions that match no workstream within the window', () => {
+      workstreams({ viewer: ['viewer'] });
+      writeFile(`notes/${day(1)}.md`, `${NOTE_HEAD}- 10:00 WATCH:DECISION: viewer stays read-only\n- 10:05 WATCH:CORRECTION: search filters go left\n`);
+      writeFile(`notes/${day(40)}.md`, `${NOTE_HEAD}- 10:00 WATCH:DECISION: an old unrelated decision\n`);
+
+      const out = run('unassigned');
+
+      assert.ok(out.includes('search filters go left'));
+      assert.ok(!out.includes('viewer stays read-only'));
+      assert.ok(!out.includes('old unrelated'));
+      assert.ok(run('unassigned --days=60').includes('old unrelated'));
+    });
+
+    it('signals an identity gap for an active workstream without a card', () => {
+      workstreams({ viewer: ['viewer'], quiet: ['quiet'] });
+      decisions('viewer', 8, 1);
+      decisions('quiet', 8, 40); // as many decisions, none in the last 30 days
+
+      const s = signals();
+
+      assert.deepEqual(s.identityGaps.map(g => g.workstream), ['viewer']);
+      assert.equal(s.identityGaps[0].recent, 8);
+    });
+
+    it('a written identity closes the gap; a legacy card does not', () => {
+      workstreams({ viewer: ['viewer'], avito: ['avito'] });
+      decisions('viewer', 8, 1);
+      decisions('avito', 8, 1);
+      run(`write-identity --workstream=viewer --content=${writeContent('---\nname: viewer\ndescription: Read-only viewer\ntype: project\n---\nbody')}`);
+      writeFile('workstreams/avito.md', '---\nname: Avito\ntype: project\n---\nold card');
+
+      const s = signals();
+
+      assert.deepEqual(s.identityGaps.map(g => [g.workstream, g.legacy]), [['avito', true]]);
+      assert.deepEqual(s.identities, [{ workstream: 'viewer', description: 'Read-only viewer' }]);
+    });
+
+    it('suggests a new workstream only for decisions spread over several days', () => {
+      decisions('search filters', 10, 1);
+      assert.equal(signals().unassigned.suggest, true);
+
+      fs.rmSync(path.join(TMP, 'notes'), { recursive: true, force: true });
+      const burst = Array.from({ length: 12 }, (_, i) => `- 10:${String(i).padStart(2, '0')} WATCH:DECISION: one-off ${i}`).join('\n');
+      writeFile(`notes/${day(1)}.md`, `${NOTE_HEAD}${burst}\n`);
+      const s = signals();
+      assert.equal(s.unassigned.items, 12);
+      assert.equal(s.unassigned.suggest, false);
+    });
+
+    it('signals --mark-reviewed resets the counts until new decisions pile up', () => {
+      workstreams({ viewer: ['viewer'] });
+      decisions('viewer', 8, 1);
+      decisions('search filters', 10, 1);
+
+      run('signals --mark-reviewed');
+      const s = signals();
+
+      assert.deepEqual(s.identityGaps, []);
+      assert.equal(s.unassigned.items, 0);
+    });
+
+    it('workstreams marks which ones have an identity', () => {
+      workstreams({ viewer: ['viewer'], docs: ['docs'] });
+      run(`write-identity --workstream=viewer --content=${writeContent('body')}`);
+
+      const out = run('workstreams');
+
+      assert.ok(/viewer .*identity ✓/.test(out));
+      assert.ok(/docs .*no identity/.test(out));
+    });
+
+    it('health warns when an identity card grows into a log', () => {
+      workstreams({ viewer: ['viewer'] });
+      run(`write-identity --workstream=viewer --content=${writeContent(Array(60).fill('- line').join('\n'))}`);
+
+      assert.ok(run('health').includes('workstreams/viewer/workstream.md is'));
+    });
+  });
+
   describe('session-changes', () => {
     const today = new Date().toISOString().slice(0, 10);
     const REPO = path.join(__dirname, '.tmp-repo');

@@ -68,6 +68,7 @@ If user picks ➕ — ask name + keywords, then:
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" add-workstream <name> <keyword1> <keyword2> ...
 ```
+If decisions on this theme are already in the notes (`node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" unassigned`), offer an identity drafted from them — see `identity` in the memory skill.
 
 ---
 
@@ -93,11 +94,12 @@ If handoff has `lastCommit` ref: show `git log <ref>..HEAD --oneline` (changes s
 ## Step 3: Workstream brief
 
 ```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" identity <name>     # what the workstream is and isn't — NO_IDENTITY if none
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" handoff <name>      # per-workstream handoff if available
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" workstream <name> --brief
 ```
 
-Show: open/done task counts, blockers, pickable now. **Do NOT read full files** — full context loads only after task pick in Step 4.
+Read the identity first: it frames the handoff. Show: open/done task counts, blockers, pickable now. **Do NOT read full files** — full context loads only after task pick in Step 4.
 
 ---
 

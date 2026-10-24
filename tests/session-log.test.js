@@ -102,6 +102,44 @@ describe('session-log.js', () => {
     assert.ok(output.includes('/docs-reflect'));
   });
 
+  describe('workstream signals', () => {
+    const day = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    function decisions(topic, n) {
+      const notesDir = path.join(ctx.memoryDir, 'notes');
+      fs.mkdirSync(notesDir, { recursive: true });
+      for (let i = 0; i < n; i++) {
+        fs.writeFileSync(path.join(notesDir, `${day(i + 1)}.md`), `# notes\n\n- 10:00 WATCH:DECISION: ${topic} decision ${i}\n`);
+      }
+    }
+
+    it('stays silent below the thresholds', () => {
+      decisions('search filters', 3);
+
+      assert.ok(!run({ session_id: 's' }, ctx).includes('Workstreams (act only'));
+    });
+
+    it('asks the model to offer a workstream when decisions recur over several days', () => {
+      decisions('search filters', 10);
+
+      const output = run({ session_id: 's' }, ctx);
+
+      assert.ok(output.includes('10 decisions over 10 days match no workstream'));
+      assert.ok(output.includes('signals --mark-reviewed'));
+    });
+
+    it('lists identities without asking for anything', () => {
+      fs.writeFileSync(path.join(ctx.memoryDir, 'workstreams.json'), JSON.stringify({ viewer: ['viewer'] }));
+      fs.mkdirSync(path.join(ctx.memoryDir, 'workstreams', 'viewer'), { recursive: true });
+      fs.writeFileSync(path.join(ctx.memoryDir, 'workstreams', 'viewer', 'workstream.md'),
+        '---\nname: viewer\ndescription: Read-only viewer over memory\ntype: project\n---\nbody');
+
+      const output = run({ session_id: 's' }, ctx);
+
+      assert.ok(output.includes('Identities: viewer — Read-only viewer over memory'));
+      assert.ok(!output.includes('--mark-reviewed'));
+    });
+  });
+
   it('handles missing stdin gracefully', () => {
 
     const result = execSync(`echo '{}' | node "${SCRIPT}"`, {

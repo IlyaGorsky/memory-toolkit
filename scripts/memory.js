@@ -23,6 +23,10 @@
  *   node memory.js session-changes                                   — git commits + files since session start (JSON)
  *   node memory.js handoff [<workstream>]                            — print per-ws handoff if exists, else global, else NO_HANDOFF
  *   node memory.js write-handoff --workstream=<name> --content=<f>   — atomic write to workstreams/<name>/handoff.md
+ *   node memory.js identity <workstream> [--material]                — identity card, else NO_IDENTITY (--material: + decisions to draft it from)
+ *   node memory.js write-identity --workstream=<name> --content=<f>  — write workstreams/<name>/workstream.md
+ *   node memory.js unassigned [--days=30]                            — decisions that match no workstream, by day
+ *   node memory.js signals [--mark-reviewed]                         — identity gaps and new-workstream signal (JSON, for SessionStart)
  *   node memory.js dir                                               — memory directory path
  */
 
@@ -562,17 +566,19 @@ function listWorkstreams() {
         }
         const weights = files.map(f => calculateWeight(f, weightConfig)).sort((a, b) => b - a);
         const score = weights.slice(0, 5).reduce((sum, w) => sum + w, 0);
-        return { name, keywords, files, lastTouched, handoff, score };
+        const identity = readIdentity(name);
+        return { name, keywords, files, lastTouched, handoff, score, identity };
     });
 
     enriched.sort((a, b) => b.score - a.score);
 
     console.log('\nWorkstreams (sorted by top-5 weight concentration):\n');
-    enriched.forEach(({ name, keywords, files, lastTouched, handoff, score }, i) => {
+    enriched.forEach(({ name, keywords, files, lastTouched, handoff, score, identity }, i) => {
         const lastDate = lastTouched ? lastTouched.toISOString().slice(0, 10) : '—';
         const handoffDate = handoff ? handoff.mtime.toISOString().slice(0, 10) : null;
         const handoffLabel = handoff ? `, handoff: ${handoffDate}${handoff.source === 'global' ? ' (global)' : ''}` : '';
-        console.log(`  ${i + 1}. ${name} — ${files.length} files, score: ${score.toFixed(1)}, last touched: ${lastDate}${handoffLabel}`);
+        const identityLabel = identity ? (identity.legacy ? ', identity: legacy card' : ', identity ✓') : ', no identity';
+        console.log(`  ${i + 1}. ${name} — ${files.length} files, score: ${score.toFixed(1)}, last touched: ${lastDate}${handoffLabel}${identityLabel}`);
         console.log(`     keywords: ${keywords.join(', ')}`);
     });
     console.log(`\n  ➕ Add new: memory.js add-workstream <name> <keywords...>`);
@@ -699,6 +705,16 @@ function health() {
         } catch {}
     }
 
+    // 7. Identity is a card, not a log: history belongs in handoff.md and notes/
+    for (const ws of Object.keys(WORKSTREAM_ALIASES)) {
+        const identity = readIdentity(ws);
+        if (!identity || identity.legacy) continue;
+        const lines = getBody(identity.content).split('\n').length;
+        if (lines > IDENTITY_MAX_LINES) {
+            issues.push({ level: 'warn', check: 'identity-size', message: `workstreams/${ws}/workstream.md is ${lines} lines (max ${IDENTITY_MAX_LINES}): keep the card, move history to handoff` });
+        }
+    }
+
     // 6. Session-watcher parse error rate
     const watcherStatePath = path.join(MEMORY_DIR, '.watcher-state.json');
     if (fs.existsSync(watcherStatePath)) {
@@ -761,21 +777,21 @@ function health() {
 
 // --- Classify ---
 
+// Workstreams whose keywords occur in the text (case-insensitive, multi-label).
+function matchWorkstreams(text) {
+    const lower = String(text).toLowerCase();
+    return Object.entries(WORKSTREAM_ALIASES)
+        .filter(([, keywords]) => [].concat(keywords || []).some(k => k && lower.includes(String(k).toLowerCase())))
+        .map(([ws]) => ws);
+}
+
 function classifyItems(items) {
     const buckets = {};
     const unassigned = [];
-    const aliasEntries = Object.entries(WORKSTREAM_ALIASES);
 
     for (const raw of items) {
         const item = String(raw);
-        const lower = item.toLowerCase();
-        const hits = [];
-        for (const [ws, keywords] of aliasEntries) {
-            const kws = [].concat(keywords || []);
-            if (kws.some(k => k && lower.includes(String(k).toLowerCase()))) {
-                hits.push(ws);
-            }
-        }
+        const hits = matchWorkstreams(item);
         if (hits.length === 0) {
             unassigned.push(item);
         } else {
@@ -812,6 +828,154 @@ function classify(...args) {
     console.log(JSON.stringify(classifyItems(items), null, 2));
 }
 
+// --- Identity ---
+
+// workstreams/<ws>/workstream.md: what the workstream is, why, what it doesn't do.
+// It is distilled from decisions sessions already logged (WATCH:DECISION/CORRECTION,
+// REFLECT) rather than asked for by a ritual — in tms, /session-start ran in 3 of
+// 525 sessions, the watcher in all of them.
+const IDENTITY_MAX_LINES = 40;
+const IDENTITY_MATERIAL_LIMIT = 60;
+// SessionStart signals, calibrated on real memory 2026-10-24: a one-off session
+// leaves too few decisions, or all on one day, to suggest anything.
+const SIGNAL_WINDOW_DAYS = 30;
+const IDENTITY_MIN_DECISIONS = 8;
+const IDENTITY_MIN_RECENT = 3;
+const NEW_WORKSTREAM_MIN_ITEMS = 10;
+const NEW_WORKSTREAM_MIN_DAYS = 3;
+// Workstreams are optional — the notes and the watcher help without any. The model
+// offers once and then writes this marker, whatever the answer; signals count only
+// decisions after it, so a declined offer comes back only once new decisions pile up.
+const WORKSTREAMS_REVIEWED = 'WORKSTREAMS_REVIEWED';
+
+// A flat workstreams/<ws>.md card predates per-workstream folders. It is read as
+// identity but flagged: such cards tend to grow into logs.
+function readIdentity(ws) {
+    const own = path.join(MEMORY_DIR, 'workstreams', ws, 'workstream.md');
+    const legacy = path.join(MEMORY_DIR, 'workstreams', `${ws}.md`);
+    for (const [file, isLegacy] of [[own, false], [legacy, true]]) {
+        if (fs.existsSync(file)) return { file, legacy: isLegacy, content: fs.readFileSync(file, 'utf-8') };
+    }
+    return null;
+}
+
+function queryDecisionLog() {
+    const notesDir = DIRS.notes;
+    if (!notesDir || !fs.existsSync(notesDir)) return [];
+
+    const results = [];
+    let reviewedUpTo = 0;
+    for (const entry of fs.readdirSync(notesDir).sort()) {
+        if (!entry.endsWith('.md')) continue;
+        const date = entry.replace('.md', '');
+        for (const line of fs.readFileSync(path.join(notesDir, entry), 'utf-8').split('\n')) {
+            if (/^- \d{2}:\d{2} WORKSTREAMS_REVIEWED\b/.test(line)) {
+                reviewedUpTo = results.length;
+                continue;
+            }
+            const match = line.match(/^- (\d{2}:\d{2}) (?:WATCH:(DECISION|CORRECTION)|(REFLECT)):?\s*(.+)$/);
+            if (match) results.push({ date, time: match[1], kind: (match[2] || match[3]).toLowerCase(), text: match[4].trim() });
+        }
+    }
+    return results.map((d, i) => ({ ...d, reviewed: i < reviewedUpTo }));
+}
+
+function daysAgo(days) {
+    return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function printIdentity(...args) {
+    const ws = (args.find(a => a && !a.startsWith('--')) || '').trim();
+    if (!/^[a-zA-Z0-9_-]+$/.test(ws)) {
+        console.error('Usage: memory.js identity <workstream> [--material]');
+        process.exit(1);
+    }
+    const identity = readIdentity(ws);
+    if (!args.includes('--material')) {
+        if (!identity) return console.log('NO_IDENTITY');
+        return process.stdout.write(identity.content);
+    }
+
+    const decisions = queryDecisionLog().filter(d => matchWorkstreams(d.text).includes(ws)).reverse();
+    console.log(`# Identity material: ${ws}\n`);
+    console.log(`keywords: ${[].concat(WORKSTREAM_ALIASES[ws] || []).join(', ') || '—'}\n`);
+    console.log('## Current identity\n');
+    if (!identity) {
+        console.log('NO_IDENTITY\n');
+    } else {
+        const lines = getBody(identity.content).split('\n');
+        const shown = lines.slice(0, IDENTITY_MAX_LINES * 2).join('\n');
+        const more = lines.length > IDENTITY_MAX_LINES * 2 ? `\n… ${lines.length - IDENTITY_MAX_LINES * 2} more lines` : '';
+        console.log(`${identity.legacy ? `(legacy card workstreams/${ws}.md)\n\n` : ''}${shown}${more}\n`);
+    }
+    console.log(`## Decisions, corrections, reflections (${decisions.length}, newest first)\n`);
+    for (const d of decisions.slice(0, IDENTITY_MATERIAL_LIMIT)) console.log(`- ${d.date} ${d.kind}: ${d.text}`);
+    if (decisions.length > IDENTITY_MATERIAL_LIMIT) console.log(`\n… ${decisions.length - IDENTITY_MATERIAL_LIMIT} older not shown`);
+}
+
+function printUnassigned(...args) {
+    const daysArg = args.find(a => a && a.startsWith('--days='));
+    const days = Number(daysArg && daysArg.slice('--days='.length)) || SIGNAL_WINDOW_DAYS;
+    const since = daysAgo(days);
+    const items = queryDecisionLog().filter(d => d.date >= since && !matchWorkstreams(d.text).length);
+    if (!items.length) return console.log(`No decisions outside workstreams in the last ${days} days.`);
+
+    const byDate = {};
+    for (const d of items) (byDate[d.date] = byDate[d.date] || []).push(d);
+    const dates = Object.keys(byDate).sort().reverse();
+    console.log(`\n# Decisions outside every workstream, last ${days} days (${items.length} over ${dates.length} days)\n`);
+    for (const date of dates) {
+        console.log(`## ${date} (${byDate[date].length})`);
+        for (const d of byDate[date]) console.log(`  ${d.time} ${d.kind}: ${d.text}`);
+        console.log('');
+    }
+}
+
+// What the SessionStart hook turns into instructions for the model.
+function workstreamSignals() {
+    const since = daysAgo(SIGNAL_WINDOW_DAYS);
+    const counts = {};
+    const unassigned = [];
+    for (const d of queryDecisionLog()) {
+        const hits = matchWorkstreams(d.text);
+        const fresh = d.date >= since && !d.reviewed;
+        if (!hits.length && fresh) unassigned.push(d);
+        for (const ws of hits) {
+            const c = counts[ws] || (counts[ws] = { total: 0, recent: 0 });
+            c.total++;
+            if (fresh) c.recent++;
+        }
+    }
+
+    const identityGaps = Object.entries(counts)
+        .filter(([, c]) => c.total >= IDENTITY_MIN_DECISIONS && c.recent >= IDENTITY_MIN_RECENT)
+        .map(([workstream, c]) => ({ workstream, ...c, identity: readIdentity(workstream) }))
+        .filter(g => !g.identity || g.identity.legacy)
+        .sort((a, b) => b.recent - a.recent)
+        .map(({ workstream, total, recent, identity }) => ({ workstream, total, recent, legacy: Boolean(identity) }));
+    const identities = Object.keys(WORKSTREAM_ALIASES)
+        .map(ws => [ws, readIdentity(ws)])
+        .filter(([, identity]) => identity && !identity.legacy)
+        .map(([workstream, identity]) => ({ workstream, description: parseFrontmatter(identity.content).description || '' }));
+    const days = new Set(unassigned.map(d => d.date)).size;
+
+    return {
+        windowDays: SIGNAL_WINDOW_DAYS,
+        identities,
+        identityGaps,
+        unassigned: {
+            items: unassigned.length,
+            days,
+            suggest: unassigned.length >= NEW_WORKSTREAM_MIN_ITEMS && days >= NEW_WORKSTREAM_MIN_DAYS,
+        },
+    };
+}
+
+function printSignals(...args) {
+    if (args.includes('--mark-reviewed')) return note(WORKSTREAMS_REVIEWED);
+    console.log(JSON.stringify(workstreamSignals(), null, 2));
+}
+
 // --- Session activity ---
 
 function sessionActivity() {
@@ -823,7 +987,7 @@ function sessionActivity() {
 
     const lines = fs.readFileSync(notePath, 'utf-8').split('\n');
     const START = /^- (\d{2}:\d{2}) SESSION_START/;
-    const MARKER = /^- \d{2}:\d{2} (SESSION_START|SESSION_END|NEW_WORKSTREAM|DOCS_REVIEWED)/;
+    const MARKER = /^- \d{2}:\d{2} (SESSION_START|SESSION_END|NEW_WORKSTREAM|DOCS_REVIEWED|WORKSTREAMS_REVIEWED)/;
     const LINE = /^- (\d{2}:\d{2}) (.+)$/;
 
     let boundaryIdx = -1;
@@ -895,11 +1059,23 @@ function printHandoff(...args) {
 }
 
 function writeHandoff(...args) {
+    writeWorkstreamFile('write-handoff', 'handoff.md',
+        ws => `---\nname: ${ws} handoff\ndescription: Per-workstream handoff for ${ws}\ntype: project\n---\n`, args);
+}
+
+function writeIdentity(...args) {
+    writeWorkstreamFile('write-identity', 'workstream.md',
+        ws => `---\nname: ${ws}\ndescription: Identity of the ${ws} workstream\ntype: project\ncategory: identity\n---\n`, args);
+}
+
+// Node writes the file, so CC's frontmatter stamper (Write/Edit tools only)
+// leaves our keys where they are.
+function writeWorkstreamFile(command, fileName, frontmatterFor, args) {
     const wsArg = args.find(a => a && a.startsWith('--workstream='));
     const contentArg = args.find(a => a && a.startsWith('--content='));
     if (!wsArg || !contentArg) {
-        console.log('Usage: memory.js write-handoff --workstream=<name> --content=<path-to-md>');
-        console.log('  writes to workstreams/<name>/handoff.md');
+        console.log(`Usage: memory.js ${command} --workstream=<name> --content=<path-to-md>`);
+        console.log(`  writes to workstreams/<name>/${fileName}`);
         return;
     }
     const ws = wsArg.slice('--workstream='.length).trim();
@@ -914,14 +1090,11 @@ function writeHandoff(...args) {
 
     const dir = path.join(MEMORY_DIR, 'workstreams', ws);
     fs.mkdirSync(dir, { recursive: true });
-    const out = path.join(dir, 'handoff.md');
+    const out = path.join(dir, fileName);
 
-    const hasFrontmatter = body.startsWith('---\n');
-    const final = hasFrontmatter ? body : (
-        `---\nname: ${ws} handoff\ndescription: Per-workstream handoff for ${ws}\ntype: project\n---\n\n${body}`
-    );
+    const final = body.startsWith('---\n') ? body : `${frontmatterFor(ws)}\n${body}`;
     fs.writeFileSync(out, final.endsWith('\n') ? final : final + '\n');
-    console.log(`Wrote workstreams/${ws}/handoff.md`);
+    console.log(`Wrote workstreams/${ws}/${fileName}`);
 }
 
 // --- Router ---
@@ -943,6 +1116,10 @@ const commands = {
     'session-changes': printSessionChanges,
     'write-handoff': writeHandoff,
     handoff: printHandoff,
+    identity: printIdentity,
+    'write-identity': writeIdentity,
+    unassigned: printUnassigned,
+    signals: printSignals,
     recurring: printRecurring,
     reindex,
     health,
@@ -973,6 +1150,10 @@ if (require.main === module) {
         console.log('  session-changes        — git files+commits since session start (JSON)');
         console.log('  write-handoff --workstream=<name> --content=<f>  — write workstreams/<name>/handoff.md');
         console.log('  handoff [<workstream>]  — print per-workstream handoff if exists, else global');
+        console.log('  identity <ws> [--material]  — workstream identity card (--material: decisions to draft it from)');
+        console.log('  write-identity --workstream=<name> --content=<f>  — write workstreams/<name>/workstream.md');
+        console.log('  unassigned [--days=30] — decisions that match no workstream, by day');
+        console.log('  signals [--mark-reviewed]  — identity gaps and new-workstream signal (JSON)');
         console.log('  recurring              — find recurring feedback patterns');
         console.log('  reindex                — rebuild MEMORY.md index sorted by weight');
         console.log('  health                 — check memory health (dead links, stale, size, dupes)');
@@ -1002,6 +1183,10 @@ module.exports = {
     queryDocs,
     queryWatchFindings,
     classifyItems,
+    matchWorkstreams,
+    readIdentity,
+    queryDecisionLog,
+    workstreamSignals,
     sessionActivity,
     sessionChanges,
     writeHandoff,
