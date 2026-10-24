@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { testEnv } = require('./helpers/env');
 const { spawnSync } = require('child_process');
 
 const LOG_MODULE = path.join(__dirname, '..', 'scripts', 'lib', 'log.js');
@@ -10,7 +11,7 @@ const LOG_MODULE = path.join(__dirname, '..', 'scripts', 'lib', 'log.js');
 function runChild(code, env) {
   const res = spawnSync(process.execPath, ['-e', code], {
     encoding: 'utf8',
-    env: { ...process.env, ...env },
+    env: testEnv(env),
   });
   return { stderr: res.stderr, stdout: res.stdout, status: res.status };
 }

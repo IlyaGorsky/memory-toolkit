@@ -73,7 +73,6 @@ function runHook(scriptName, stdin, { env = {}, timeout = 10000, cwd } = {}) {
   const baseEnv = {
     HOME: env.HOME || process.env.HOME,
     CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT,
-    ANTHROPIC_API_KEY: '',
     PATH: process.env.PATH,
     MT_LOG: 'silent',
   };

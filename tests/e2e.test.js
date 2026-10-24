@@ -10,6 +10,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { testEnv } = require('./helpers/env');
 const { execSync} = require('child_process');
 
 const PLUGIN_ROOT = path.join(__dirname, '..');
@@ -33,7 +34,7 @@ function sessionLogRun(stdinJson) {
       encoding: 'utf8',
       timeout: 5000,
       cwd: projectDir,
-      env: { ...process.env, HOME: fakeHome },
+      env: testEnv({ HOME: fakeHome }),
     }
   );
 }
@@ -195,7 +196,7 @@ describe('e2e: isolated sandbox', () => {
             encoding: 'utf8',
             timeout: 10000,
             cwd: projectDir,
-            env: { ...process.env, HOME: fakeHome, ANTHROPIC_API_KEY: '' },
+            env: testEnv({ HOME: fakeHome }),
           }
         );
       } catch {
@@ -224,7 +225,7 @@ describe('e2e: isolated sandbox', () => {
           encoding: 'utf8',
           timeout: 5000,
           cwd: projectDir,
-          env: { ...process.env, HOME: fakeHome },
+          env: testEnv({ HOME: fakeHome }),
         }
       );
       // Throttled — should output empty JSON
@@ -291,7 +292,7 @@ describe('e2e: isolated sandbox', () => {
             encoding: 'utf8',
             timeout: 10000,
             cwd: projectDir,
-            env: { ...process.env, HOME: fakeHome, ANTHROPIC_API_KEY: '' },
+            env: testEnv({ HOME: fakeHome }),
           }
         );
       } catch {}
@@ -341,7 +342,7 @@ describe('e2e: isolated sandbox', () => {
             encoding: 'utf8',
             timeout: 10000,
             cwd: projectDir,
-            env: { ...process.env, HOME: fakeHome, ANTHROPIC_API_KEY: '' },
+            env: testEnv({ HOME: fakeHome }),
           }
         );
       } catch {}
@@ -388,7 +389,7 @@ describe('e2e: isolated sandbox', () => {
             encoding: 'utf8',
             timeout: 10000,
             cwd: projectDir,
-            env: { ...process.env, HOME: fakeHome, ANTHROPIC_API_KEY: '' },
+            env: testEnv({ HOME: fakeHome }),
           }
         );
       } catch {}
@@ -721,7 +722,7 @@ describe('e2e: isolated sandbox', () => {
           {
             encoding: 'utf8',
             timeout: 5000,
-            env: { ...process.env, CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, MEMORY_TOOLKIT_PIPELINE_DEBUG: '1' },
+            env: testEnv({ CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, MEMORY_TOOLKIT_PIPELINE_DEBUG: '1' }),
           }
         );
       } catch (e) {
@@ -764,7 +765,7 @@ describe('e2e: isolated sandbox', () => {
     it('stays silent for malformed stdin', () => {
       const out = execSync(
         `echo 'not json' | node "${path.join(PLUGIN_ROOT, 'scripts', 'pipeline-hint.js')}"`,
-        { encoding: 'utf8', timeout: 5000, env: { ...process.env, CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT } }
+        { encoding: 'utf8', timeout: 5000, env: testEnv({ CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT }) }
       );
       assert.equal(out.trim(), '', 'no output for malformed stdin');
     });

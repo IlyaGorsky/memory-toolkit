@@ -5,6 +5,7 @@ const os = require('os');
 const path = require('path');
 const { execSync } = require('child_process');
 const { sanitizePath } = require('../scripts/lib/find-memory-dir');
+const { testEnv } = require('./helpers/env');
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'session-save.js');
 
@@ -29,7 +30,7 @@ function run(stdinJson, ctx) {
   return execSync(`echo '${JSON.stringify(stdinJson)}' | node "${SCRIPT}"`, {
     encoding: 'utf8',
     cwd: ctx.cwd,
-    env: { ...process.env, HOME: ctx.home },
+    env: testEnv({ HOME: ctx.home }),
     timeout: 5000,
     stdio: ['pipe', 'pipe', 'pipe'],
   });

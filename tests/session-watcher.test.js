@@ -80,16 +80,17 @@ describe('quoteArg (Windows command line)', () => {
 });
 
 // The Anthropic directory holds versions that read a credential from the user's
-// environment or forward the whole environment to a subprocess.
-describe('no credential reads in plugin scripts', () => {
-  const scriptsDir = path.join(__dirname, '..', 'scripts');
-  const files = [...fs.readdirSync(scriptsDir), ...fs.readdirSync(path.join(scriptsDir, 'lib')).map(f => `lib/${f}`)]
-    .filter(f => f.endsWith('.js'));
-  for (const file of files) {
-    it(file, () => {
-      const src = fs.readFileSync(path.join(scriptsDir, file), 'utf8');
-      assert.ok(!/ANTHROPIC_API_KEY|API_KEY|_TOKEN\b/.test(src), 'reads a credential');
-      assert.ok(!/\.\.\.process\.env/.test(src), 'forwards the whole environment');
+// environment or pass the whole environment to a subprocess. Tests ship with the
+// plugin (the repo root is the plugin folder), so they are checked too.
+describe('no credential reads or environment forwarding', () => {
+  const root = path.join(__dirname, '..');
+  const walk = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e =>
+    e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.js') ? [path.join(dir, e.name)] : []);
+  for (const file of [...walk(path.join(root, 'scripts')), ...walk(path.join(root, 'tests'))]) {
+    it(path.relative(root, file), () => {
+      const src = fs.readFileSync(file, 'utf8');
+      assert.ok(!/process\.env\.\w*(KEY|TOKEN|SECRET)\b/.test(src), 'reads a credential from the environment');
+      assert.ok(!/\.{3}process\.env\b/.test(src), 'forwards the whole environment');
     });
   }
 });

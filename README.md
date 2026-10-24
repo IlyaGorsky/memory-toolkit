@@ -1,4 +1,4 @@
-![memory-toolkit](assets/logo.svg)
+![memory-toolkit](https://raw.githubusercontent.com/IlyaGorsky/memory-toolkit/brand/logo.svg)
 
 # memory-toolkit
 

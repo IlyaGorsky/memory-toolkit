@@ -2,6 +2,7 @@ const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const { testEnv } = require('./helpers/env');
 const { execSync } = require('child_process');
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'memory.js');
@@ -782,7 +783,7 @@ describe('memory.js', () => {
     it('dir prints a path and exits 1 when memory does not exist; other commands refuse', () => {
       const home = fs.mkdtempSync(path.join(require('os').tmpdir(), 'mt-home-'));
       const cwd = fs.mkdtempSync(path.join(require('os').tmpdir(), 'mt-nomem-'));
-      const env = { ...process.env, HOME: home };
+      const env = testEnv({ HOME: home });
       const dir = require('child_process').spawnSync(process.execPath, [SCRIPT, 'dir'], { cwd, env, encoding: 'utf8' });
       assert.equal(dir.status, 1);
       assert.ok(dir.stdout.trim().endsWith(path.join('memory')));

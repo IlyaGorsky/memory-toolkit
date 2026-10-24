@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { testEnv } = require('./helpers/env');
 
 const {
   withSandbox, runHook, assertValidHookStdout, estimateTokens,
@@ -290,7 +291,7 @@ describe('session-save.js', () => {
 });
 
 describe('session-watcher.js', () => {
-  // Default sandbox blocks LLM by clearing ANTHROPIC_API_KEY.
+  // The sandbox HOME has no Claude login, so the watcher's `claude -p` fails fast.
   // For tests that specifically want the non-LLM path AND block the CLI
   // fallback (which would mutate $HOME/.claude/**), also set PATH to /nonexistent.
 
@@ -795,7 +796,7 @@ describe('commit-note.js', () => {
   it('rejected commit (HEAD is an old commit) → no note', () => {
     withSandbox(({ home, memoryDir, projectDir }) => {
       execSync('git -c user.name=t -c user.email=t@t commit -q --allow-empty -m old-head', {
-        cwd: projectDir, env: { ...process.env, GIT_COMMITTER_DATE: '2020-01-01T00:00:00' },
+        cwd: projectDir, env: testEnv({ GIT_COMMITTER_DATE: '2020-01-01T00:00:00' }),
       });
       runHook('commit-note.js', JSON.stringify({ cwd: projectDir, tool_input: { command: 'git commit -m rejected' } }),
         { env: { HOME: home }, cwd: projectDir });
