@@ -102,6 +102,57 @@ describe('session-log.js', () => {
     assert.ok(output.includes('/docs-reflect'));
   });
 
+  describe('handoff', () => {
+    const daysAgo = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+    function handoff({ age, branch = '' }) {
+      fs.mkdirSync(path.join(ctx.memoryDir, 'workstreams'), { recursive: true });
+      fs.writeFileSync(path.join(ctx.memoryDir, 'workstreams', 'handoff.md'),
+        `---\nname: Session handoff\ndescription: "skills refresh, next: replay"\nmetadata:\n  modified: ${daysAgo(age)}\n${branch ? `  branch: ${branch}\n` : ''}---\n\n## Last session\nBODY-TEXT\n`);
+    }
+
+    it('passes a fresh handoff through as is', () => {
+      handoff({ age: 2 });
+
+      const output = run({ session_id: 's' }, ctx);
+
+      assert.ok(output.includes('BODY-TEXT'));
+      assert.ok(!output.includes('Older handoff'));
+    });
+
+    it('labels a week-old handoff with its age, by modified rather than mtime', () => {
+      handoff({ age: 10 });
+
+      const output = run({ session_id: 's' }, ctx);
+
+      assert.ok(output.includes('Older handoff'));
+      assert.ok(output.includes('10 days ago'));
+      assert.ok(output.includes('BODY-TEXT'));
+    });
+
+    it('shows only the summary of a handoff from another branch', () => {
+      execSync('git init -q -b harness', { cwd: ctx.cwd });
+      handoff({ age: 1, branch: 'skills-refresh' });
+
+      const output = run({ session_id: 's' }, ctx);
+
+      assert.ok(output.includes('branch skills-refresh (now on harness)'));
+      assert.ok(output.includes('Summary: skills refresh, next: replay'));
+      assert.ok(!output.includes('BODY-TEXT'));
+    });
+  });
+
+  it('invites /session-continue when the branch looks like a workstream', () => {
+    execSync('git init -q -b viewer-fixes', { cwd: ctx.cwd });
+    fs.writeFileSync(path.join(ctx.memoryDir, 'workstreams.json'), JSON.stringify({ viewer: ['viewer'] }));
+    fs.mkdirSync(path.join(ctx.memoryDir, 'workstreams', 'viewer'), { recursive: true });
+    fs.writeFileSync(path.join(ctx.memoryDir, 'workstreams', 'viewer', 'handoff.md'), '---\nname: viewer handoff\n---\nnext');
+
+    const context = JSON.parse(run({ session_id: 's' }, ctx)).hookSpecificOutput.additionalContext;
+
+    assert.ok(context.includes('looks like workstream "viewer"'), context);
+    assert.ok(context.includes('/session-continue viewer'));
+  });
+
   describe('workstream signals', () => {
     const day = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     function decisions(topic, n) {

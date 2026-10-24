@@ -22,11 +22,11 @@
  *   node memory.js session-activity                                  — current session items since last SESSION_START (JSON)
  *   node memory.js session-changes                                   — git commits + files since session start (JSON)
  *   node memory.js handoff [<workstream>]                            — print per-ws handoff if exists, else global, else NO_HANDOFF
- *   node memory.js write-handoff --workstream=<name> --content=<f>   — atomic write to workstreams/<name>/handoff.md
+ *   node memory.js write-handoff --workstream=<name>|--global --content=<f> — write workstreams/<name>/handoff.md (stamps modified + branch)
  *   node memory.js identity <workstream> [--material]                — identity card, else NO_IDENTITY (--material: + decisions to draft it from)
  *   node memory.js write-identity --workstream=<name> --content=<f>  — write workstreams/<name>/workstream.md
  *   node memory.js unassigned [--days=30]                            — decisions that match no workstream, by day
- *   node memory.js signals [--mark-reviewed]                         — identity gaps and new-workstream signal (JSON, for SessionStart)
+ *   node memory.js signals [--branch=<b>] [--mark-reviewed]          — identity gaps, new-workstream signal, branch match (JSON, for SessionStart)
  *   node memory.js dir                                               — memory directory path
  */
 
@@ -932,7 +932,7 @@ function printUnassigned(...args) {
 }
 
 // What the SessionStart hook turns into instructions for the model.
-function workstreamSignals() {
+function workstreamSignals(branch = '') {
     const since = daysAgo(SIGNAL_WINDOW_DAYS);
     const counts = {};
     const unassigned = [];
@@ -958,10 +958,19 @@ function workstreamSignals() {
         .filter(([, identity]) => identity && !identity.legacy)
         .map(([workstream, identity]) => ({ workstream, description: parseFrontmatter(identity.content).description || '' }));
     const days = new Set(unassigned.map(d => d.date)).size;
+    // Workstreams the branch name points to, if there is anything to continue
+    const branchWorkstreams = (branch ? matchWorkstreams(branch) : [])
+        .map(ws => ({
+            workstream: ws,
+            identity: Boolean(readIdentity(ws)),
+            handoff: fs.existsSync(path.join(MEMORY_DIR, 'workstreams', ws, 'handoff.md')),
+        }))
+        .filter(w => w.identity || w.handoff);
 
     return {
         windowDays: SIGNAL_WINDOW_DAYS,
         identities,
+        branchWorkstreams,
         identityGaps,
         unassigned: {
             items: unassigned.length,
@@ -973,7 +982,8 @@ function workstreamSignals() {
 
 function printSignals(...args) {
     if (args.includes('--mark-reviewed')) return note(WORKSTREAMS_REVIEWED);
-    console.log(JSON.stringify(workstreamSignals(), null, 2));
+    const branchArg = args.find(a => a && a.startsWith('--branch='));
+    console.log(JSON.stringify(workstreamSignals(branchArg ? branchArg.slice('--branch='.length) : ''), null, 2));
 }
 
 // --- Session activity ---
@@ -1058,29 +1068,59 @@ function printHandoff(...args) {
     console.log('NO_HANDOFF');
 }
 
+// A handoff records when and on which branch it was written: the SessionStart hook
+// shows an old or other-branch handoff as such instead of as the last session.
+// `--global` writes workstreams/handoff.md.
 function writeHandoff(...args) {
-    writeWorkstreamFile('write-handoff', 'handoff.md',
-        ws => `---\nname: ${ws} handoff\ndescription: Per-workstream handoff for ${ws}\ntype: project\n---\n`, args);
+    const branch = currentBranch();
+    writeWorkstreamFile('write-handoff', 'handoff.md', args, {
+        global: args.includes('--global'),
+        frontmatterFor: ws => ws
+            ? `---\nname: ${ws} handoff\ndescription: Per-workstream handoff for ${ws}\ntype: project\n---\n`
+            : '---\nname: Session handoff\ndescription: Context for starting the next session\ntype: project\n---\n',
+        stamp: { modified: new Date().toISOString(), ...(branch && { branch }) },
+    });
 }
 
 function writeIdentity(...args) {
-    writeWorkstreamFile('write-identity', 'workstream.md',
-        ws => `---\nname: ${ws}\ndescription: Identity of the ${ws} workstream\ntype: project\ncategory: identity\n---\n`, args);
+    writeWorkstreamFile('write-identity', 'workstream.md', args, {
+        frontmatterFor: ws => `---\nname: ${ws}\ndescription: Identity of the ${ws} workstream\ntype: project\ncategory: identity\n---\n`,
+        stamp: { modified: new Date().toISOString() },
+    });
+}
+
+function currentBranch() {
+    try {
+        return execSync('git branch --show-current', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    } catch {
+        return '';
+    }
+}
+
+// Sets frontmatter keys in place — top-level, or the copy CC's stamper moved under metadata:.
+function setFrontmatter(content, fields) {
+    return content.replace(/^---\n([\s\S]*?)\n---/, (_, fm) => {
+        for (const [key, value] of Object.entries(fields)) {
+            const line = new RegExp(`^(\\s*)${key}:.*$`, 'm');
+            fm = line.test(fm) ? fm.replace(line, (__, indent) => `${indent}${key}: ${value}`) : `${fm}\n${key}: ${value}`;
+        }
+        return `---\n${fm}\n---`;
+    });
 }
 
 // Node writes the file, so CC's frontmatter stamper (Write/Edit tools only)
 // leaves our keys where they are.
-function writeWorkstreamFile(command, fileName, frontmatterFor, args) {
+function writeWorkstreamFile(command, fileName, args, { global = false, frontmatterFor, stamp }) {
     const wsArg = args.find(a => a && a.startsWith('--workstream='));
     const contentArg = args.find(a => a && a.startsWith('--content='));
-    if (!wsArg || !contentArg) {
+    if ((!wsArg && !global) || !contentArg) {
         console.log(`Usage: memory.js ${command} --workstream=<name> --content=<path-to-md>`);
         console.log(`  writes to workstreams/<name>/${fileName}`);
         return;
     }
-    const ws = wsArg.slice('--workstream='.length).trim();
+    const ws = global ? null : wsArg.slice('--workstream='.length).trim();
     const contentPath = contentArg.slice('--content='.length);
-    if (!ws || !/^[a-zA-Z0-9_-]+$/.test(ws)) {
+    if (!global && !/^[a-zA-Z0-9_-]+$/.test(ws)) {
         console.error(`Invalid workstream name: "${ws}"`);
         process.exit(1);
     }
@@ -1088,13 +1128,13 @@ function writeWorkstreamFile(command, fileName, frontmatterFor, args) {
     try { body = fs.readFileSync(contentPath, 'utf-8'); }
     catch (e) { console.error(`Failed to read content: ${e.message}`); process.exit(1); }
 
-    const dir = path.join(MEMORY_DIR, 'workstreams', ws);
-    fs.mkdirSync(dir, { recursive: true });
-    const out = path.join(dir, fileName);
+    const rel = global ? `workstreams/${fileName}` : `workstreams/${ws}/${fileName}`;
+    const out = path.join(MEMORY_DIR, rel);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
 
-    const final = body.startsWith('---\n') ? body : `${frontmatterFor(ws)}\n${body}`;
+    const final = setFrontmatter(body.startsWith('---\n') ? body : `${frontmatterFor(ws)}\n${body}`, stamp);
     fs.writeFileSync(out, final.endsWith('\n') ? final : final + '\n');
-    console.log(`Wrote workstreams/${ws}/${fileName}`);
+    console.log(`Wrote ${rel}`);
 }
 
 // --- Router ---
@@ -1148,7 +1188,7 @@ if (require.main === module) {
         console.log('  classify --items=<f>   — classify items by workstream keywords (JSON in/out)');
         console.log('  session-activity       — current session items since last SESSION_START (JSON)');
         console.log('  session-changes        — git files+commits since session start (JSON)');
-        console.log('  write-handoff --workstream=<name> --content=<f>  — write workstreams/<name>/handoff.md');
+        console.log('  write-handoff --workstream=<name>|--global --content=<f>  — write a handoff (stamps modified + branch)');
         console.log('  handoff [<workstream>]  — print per-workstream handoff if exists, else global');
         console.log('  identity <ws> [--material]  — workstream identity card (--material: decisions to draft it from)');
         console.log('  write-identity --workstream=<name> --content=<f>  — write workstreams/<name>/workstream.md');

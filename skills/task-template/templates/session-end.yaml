@@ -50,7 +50,7 @@ phases:
     when: "user confirmed handoff"
     description: Write workstreams/handoff.md
     steps:
-      - description: "Write confirmed handoff_content to <memory dir>/workstreams/handoff.md (path: node \"${CLAUDE_PLUGIN_ROOT}/scripts/memory.js\" dir)"
+      - description: "Save confirmed handoff_content to /tmp/handoff.md, then run node \"${CLAUDE_PLUGIN_ROOT}/scripts/memory.js\" write-handoff --global --content=/tmp/handoff.md (stamps date and branch; not the Write tool)"
 
   - id: reflect-cascade
     depends: [memory-scan]

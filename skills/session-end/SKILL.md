@@ -94,13 +94,17 @@ On confirm, write in two layers:
    node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" write-handoff --workstream=<ws> --content=/tmp/<ws>-handoff.md
    ```
 
-2. **Global handoff** — write `workstreams/handoff.md` (overall summary + cross-refs):
+2. **Global handoff** — `workstreams/handoff.md` (overall summary + cross-refs):
    ```markdown
    ### Per-workstream handoffs
    - lifecycle  → workstreams/lifecycle/handoff.md
    - research   → workstreams/research/handoff.md
    ```
-   Use the Write tool directly for the global file.
+   Save to /tmp/handoff.md, then:
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" write-handoff --global --content=/tmp/handoff.md
+   ```
+   Not the Write tool: `write-handoff` stamps the date and branch, so the next session start can tell an old or other-branch handoff from a fresh one.
 
 If all items land in `_unassigned`, skip per-workstream writes and save only the global handoff.
 

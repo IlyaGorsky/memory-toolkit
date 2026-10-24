@@ -105,16 +105,50 @@ if (healthWarnings) {
 }
 output.systemMessage = statusMsg;
 
-// Context injection: handoff + DOC reminder
+// Context injection: handoff + DOC reminder.
+// The handoff comes from /session-end, which most sessions never run: an old one, or
+// one from another branch, is shown as such — not as the last session.
+const HANDOFF_FRESH_DAYS = 7;
+const HANDOFF_FULL_TEXT_DAYS = 14;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// `key:` in the frontmatter, top-level or under CC's metadata:
+function frontmatterField(content, key) {
+  const fm = (content.match(/^---\n([\s\S]*?)\n---/) || [])[1] || '';
+  const m = fm.match(new RegExp(`^\\s*${key}:\\s*(.+)$`, 'm'));
+  return m ? m[1].trim().replace(/^"(.*)"$/, '$1') : '';
+}
+
+// `modified` (set by memory.js and CC's stamper), else mtime — which reading the
+// file through memory.js bumps along with hits.
+function writtenAt(file, content) {
+  const modified = Date.parse(frontmatterField(content, 'modified'));
+  return Number.isNaN(modified) ? fs.statSync(file).mtimeMs : modified;
+}
+
 let context = '';
 const handoffPath = path.join(memoryDir, 'workstreams', 'handoff.md');
+let handoffTime = 0;
 if (fs.existsSync(handoffPath)) {
-  context += fs.readFileSync(handoffPath, 'utf8') + '\n';
+  const handoff = fs.readFileSync(handoffPath, 'utf8');
+  handoffTime = writtenAt(handoffPath, handoff);
+  const ageDays = Math.floor((Date.now() - handoffTime) / DAY_MS);
+  const handoffBranch = frontmatterField(handoff, 'branch');
+  const otherBranch = Boolean(handoffBranch && branch && handoffBranch !== branch);
+  if (!otherBranch && ageDays <= HANDOFF_FRESH_DAYS) {
+    context += handoff + '\n';
+  } else {
+    const date = new Date(handoffTime).toISOString().slice(0, 10);
+    const label = `Older handoff — ${date}, ${ageDays} days ago${handoffBranch ? `, branch ${handoffBranch}` : ''}`
+      + `${otherBranch ? ` (now on ${branch})` : ''}. It may not match the current work.`;
+    context += otherBranch || ageDays > HANDOFF_FULL_TEXT_DAYS
+      ? `${label}\nSummary: ${frontmatterField(handoff, 'description') || '—'}\nFull text: node "${memJs}" --dir="${memoryDir}" handoff\n`
+      : `${label}\n${handoff}\n`;
+  }
 }
 // precompact.md newer than handoff → a session compacted without /session-end after it
 const snapshotPath = path.join(memoryDir, 'workstreams', 'precompact.md');
 if (fs.existsSync(snapshotPath)) {
-  const handoffTime = fs.existsSync(handoffPath) ? fs.statSync(handoffPath).mtimeMs : 0;
   if (fs.statSync(snapshotPath).mtimeMs > handoffTime) {
     const body = fs.readFileSync(snapshotPath, 'utf8').replace(/^---[\s\S]*?---\n/, '').trim();
     context += '---\nNewer than handoff (compact without /session-end):\n' + body + '\n';
@@ -128,7 +162,7 @@ if (healthWarnings) {
 // they reach sessions that never run /session-start. Silent below the thresholds.
 let signals = null;
 try {
-  signals = JSON.parse(execFileSync(process.execPath, [memJs, `--dir=${memoryDir}`, 'signals'], {
+  signals = JSON.parse(execFileSync(process.execPath, [memJs, `--dir=${memoryDir}`, 'signals', `--branch=${branch}`], {
     encoding: 'utf8', timeout: 5000,
   }));
 } catch {}
@@ -145,9 +179,17 @@ if (signals) {
   if (offers.length) {
     offers.push(`Offer each at most once, and whatever the answer run ${mem} signals --mark-reviewed. Workstreams are optional — never push.`);
   }
-  const lines = signals.identities.length
-    ? [`Identities: ${signals.identities.map(i => `${i.workstream} — ${i.description}`).join('; ')}. Card: ${mem} identity <name>`, ...offers]
-    : offers;
+  const info = [];
+  if (signals.identities.length) {
+    info.push(`Identities: ${signals.identities.map(i => `${i.workstream} — ${i.description}`).join('; ')}. Card: ${mem} identity <name>`);
+  }
+  // An invitation to the ritual, not its content (decisions/hooks-capture-rituals-author)
+  const match = signals.branchWorkstreams[0];
+  if (match) {
+    const has = [match.identity && 'identity', match.handoff && 'handoff'].filter(Boolean).join(' + ');
+    info.push(`Branch "${branch}" looks like workstream "${match.workstream}" (${has}). If the user picks that work up without context, suggest /session-continue ${match.workstream}.`);
+  }
+  const lines = [...info, ...offers];
   if (lines.length) {
     context += `---\nWorkstreams (act only when it fits the conversation; memory.js = node "${memJs}" --dir="${memoryDir}"):\n`
       + lines.map(l => `- ${l}`).join('\n') + '\n';

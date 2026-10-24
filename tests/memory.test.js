@@ -327,6 +327,29 @@ describe('memory.js', () => {
       assert.throws(() => run(`write-handoff --workstream=../evil --content=${contentPath}`));
     });
 
+    it('stamps modified and the current branch, also under metadata:', () => {
+      const repo = fs.mkdtempSync(path.join(require('os').tmpdir(), 'mt-handoff-branch-'));
+      execSync('git init -q -b feature-x', { cwd: repo });
+      const contentPath = writeContent('---\nname: x\nmetadata:\n  type: project\n  modified: 2020-01-01T00:00:00.000Z\n---\nbody');
+
+      execSync(`node "${SCRIPT}" --dir="${TMP}" write-handoff --workstream=viewer --content=${contentPath}`, { cwd: repo, env: testEnv() });
+      fs.rmSync(repo, { recursive: true, force: true });
+
+      const written = fs.readFileSync(path.join(TMP, 'workstreams', 'viewer', 'handoff.md'), 'utf8');
+      assert.ok(written.includes('branch: feature-x'));
+      assert.ok(/^ {2}modified: \d{4}-/m.test(written), written);
+      assert.ok(!written.includes('2020-01-01'));
+    });
+
+    it('--global writes workstreams/handoff.md', () => {
+      const out = run(`write-handoff --global --content=${writeContent('## Last session\n')}`);
+
+      assert.ok(out.includes('workstreams/handoff.md'));
+      const written = fs.readFileSync(path.join(TMP, 'workstreams', 'handoff.md'), 'utf8');
+      assert.ok(written.includes('name: Session handoff'));
+      assert.ok(written.includes('modified:'));
+    });
+
     it('shows usage when flags missing', () => {
       const result = run('write-handoff');
       assert.ok(result.includes('Usage'));

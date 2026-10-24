@@ -142,8 +142,9 @@ Prints `NO_HANDOFF` when neither per-workstream nor global file exists.
 ### write-handoff --workstream=<name> --content=<file>
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" write-handoff --workstream=<name> --content=<path>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" write-handoff --global --content=<path>   # workstreams/handoff.md
 ```
-Atomic write to `workstreams/<name>/handoff.md`. Frontmatter auto-added.
+Frontmatter auto-added; `modified` and `branch` are stamped so the SessionStart hook can flag an old or other-branch handoff.
 
 ### identity <workstream> [--material]
 ```bash
