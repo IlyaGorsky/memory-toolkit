@@ -13,12 +13,30 @@ memory-toolkit is the session layer that should have existed alongside CLAUDE.md
 
 Built for tech leads who run multiple workstreams in parallel.
 
+## Install
+
+**From the Anthropic plugin directory (recommended).** In Claude Code, run `/plugin directory` (Claude Code 2.1.287+) and pick **memory-toolkit**. On claude.ai or in the desktop app, open **Customize → Plugins → Discover**; a plugin added there also reaches Claude Code as a synced plugin.
+
+**Latest from GitHub.** New versions land here before the directory review publishes them:
+
 ```bash
+/plugin install memory-toolkit --marketplace IlyaGorsky/memory-toolkit   # Claude Code 2.1.275+, in a session
+# or from a terminal:
 claude plugin marketplace add IlyaGorsky/memory-toolkit
 claude plugin install memory-toolkit
 ```
 
-See [INSTALL.md](INSTALL.md) for other methods (local clone for contributors, per-session, manual copy, existing auto-memory migration).
+Install from one source only — two enabled copies of the same plugin conflict. See [INSTALL.md](INSTALL.md) for other methods (local clone for contributors, per-session, manual copy, existing auto-memory migration).
+
+### Where it works
+
+| Surface | What works |
+|---|---|
+| Claude Code (terminal, IDE extensions, desktop Code tab) | Everything: hooks, skills, the background watcher, memory in `~/.claude/projects/<project>/memory/` |
+| Cowork | Hooks and skills load; not tested end to end yet |
+| claude.ai chat | Skills only — chat ignores hooks and has no persistent memory folder, so session memory doesn't work there |
+
+The background watcher needs Claude Code 2.1.169+ (it runs `claude -p --safe-mode`).
 
 ## The problem
 
@@ -201,7 +219,7 @@ Haiku analyzes: corrections / decisions / plans
 saved to notes/ automatically — no manual effort
 ```
 
-Two equal paths: `ANTHROPIC_API_KEY` (pay-per-call, ~$0.01–0.05/session) or `claude` CLI with Max/Team subscription (schema-enforced structured output via `--json-schema`, no extra cost). Both produce the same findings.
+The watcher runs your own `claude` CLI in the background (`claude -p --safe-mode`, Haiku) with the login Claude Code already has — subscription or API key. memory-toolkit itself never reads or stores credentials. Structured output is schema-enforced via `--json-schema`.
 
 ### Use case 3: Switching between workstreams
 
@@ -368,7 +386,7 @@ They're complementary — memory-toolkit for session workflow, claude-mem or cla
 
 ## Current limitations
 
-- **Background watcher** — requires `ANTHROPIC_API_KEY` or `claude` CLI (Max/Team subscription). No-op if neither is available. Parse-error rate surfaces in `/memory health` if the CLI path degrades.
+- **Background watcher** — requires the `claude` CLI on PATH and Claude Code 2.1.169+ (`--safe-mode`). No-op otherwise. Parse-error rate surfaces in `/memory health` if the CLI path degrades.
 
 ## Roadmap
 
@@ -460,7 +478,7 @@ No — they collaborate. CC auto-memory writes to `MEMORY.md` based on user fact
 
 ### Does anything get uploaded?
 
-By default — no. Memory stays on your disk. The optional `session-watcher` hook can analyze conversation chunks via Haiku (either your `ANTHROPIC_API_KEY` or via the `claude -p` CLI subprocess) — and that's the only outbound traffic. Disable the watcher by removing it from `hooks.json` if you want zero network.
+By default — no. Memory stays on your disk. The optional `session-watcher` hook can analyze conversation chunks via Haiku through your own `claude -p` (the login Claude Code already uses) — that's the only outbound traffic, and it goes to Anthropic. memory-toolkit never reads API keys or tokens itself. Disable the watcher by removing it from `hooks.json` if you want zero network.
 
 ### Can I use it without hooks?
 

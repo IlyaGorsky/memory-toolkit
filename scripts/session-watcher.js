@@ -16,7 +16,6 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync, execSync } = require('child_process');
-const https = require('https');
 const { findMemoryDirOrExit } = require('./lib/find-memory-dir');
 const log = require('./lib/log');
 
@@ -24,7 +23,6 @@ const log = require('./lib/log');
 const THROTTLE_MS = 3 * 60 * 1000; // run at most every 3 minutes
 const MIN_NEW_MESSAGES = 6;          // need at least 6 new messages to analyze
 const MODEL = 'claude-haiku-5-5';
-const MAX_TOKENS = 1024;
 const SUGGEST_REFLECT_THRESHOLD = 8;  // suggest /reflect after N accumulated findings
 const SUGGEST_DOCS_THRESHOLD = 3;     // suggest /docs-reflect after N DOC findings
 const TAIL_BYTES = 4 * 1024 * 1024;   // read at most the transcript's last 4 MB per run
@@ -149,54 +147,6 @@ function buildConversationText(messages) {
   }).join('\n\n');
 }
 
-// Returns { findings: [...], phase: string|null }
-function callLLM(conversationText) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (apiKey) return callAPI(apiKey, conversationText);
-  return callCLI(conversationText);
-}
-
-function callAPI(apiKey, conversationText) {
-  const body = JSON.stringify({
-    model: MODEL,
-    max_tokens: MAX_TOKENS,
-    messages: [{
-      role: 'user',
-      content: `${ANALYSIS_PROMPT}\n\n---\n\n${conversationText}`,
-    }],
-  });
-
-  return new Promise((resolve) => {
-    const req = https.request({
-      hostname: 'api.anthropic.com',
-      path: '/v1/messages',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-    }, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          const text = parsed.content?.[0]?.text || '';
-          resolve(parseFindings(text));
-        } catch {
-          resolve({ findings: [], phase: null, parseError: true });
-        }
-      });
-    });
-
-    req.on('error', () => resolve({ findings: [], phase: null, parseError: false, cliError: true }));
-    req.setTimeout(15000, () => { req.destroy(); resolve({ findings: [], phase: null, parseError: false, cliError: true }); });
-    req.write(body);
-    req.end();
-  });
-}
-
 const FINDINGS_SCHEMA = {
   type: 'object',
   properties: {
@@ -227,57 +177,44 @@ function extractStructuredOutput(stdout) {
   return { findings: [], phase: null, parseError: true };
 }
 
-// `--json-schema` takes ONE argv entry of inline JSON. Run `claude` through a shell
-// (execSync) rather than execFileSync('claude', …): on Windows `claude` is a
-// `claude.cmd` shim and Node cannot spawn a .cmd with shell:false — it throws
-// `spawnSync claude ENOENT`, so callCLI always failed and the watcher silently saved
-// 0 findings (issue #4). Quoting the schema so it survives BOTH POSIX sh (unwraps
-// `\"`→`"`) and Windows cmd.exe (the CLI's argv parser does the same) keeps a single
-// cross-platform code path; JSON.stringify emits no spaces, so no other shell
-// metacharacters leak. Inputs here are all internal constants (no user data), so
-// there is no shell-injection surface.
-function jsonSchemaArg(schema) {
-  return '"' + JSON.stringify(schema).replace(/"/g, '\\"') + '"';
+// Always the user's own `claude` CLI: it brings its own login (subscription or
+// API key), so the plugin never reads or forwards credentials. The nested call
+// stays a plain completion: --safe-mode turns off hooks, plugins, CLAUDE.md and
+// MCP inside it (Claude Code >= 2.1.169) while keeping the login; --tools ""
+// keeps it from wandering the codebase; no transcript is written.
+// --bare is not usable: it drops OAuth.
+const CLI_ARGS = [
+  '-p', '--safe-mode',
+  '--model', MODEL,
+  '--output-format', 'json',
+  '--json-schema', JSON.stringify(FINDINGS_SCHEMA),
+  '--disable-slash-commands',
+  '--no-session-persistence',
+  '--strict-mcp-config',
+  '--tools', '',
+];
+
+// On Windows `claude` is a `claude.cmd` shim that Node starts only through a
+// shell (issue #4), so there the command line is quoted for cmd.exe: wrap and
+// backslash-escape inner quotes (survives the CLI's argv parser too, see #5).
+// Every argument is an internal constant — the transcript goes through stdin.
+function quoteArg(arg) {
+  return arg === '' || /[\s"]/.test(arg) ? '"' + arg.replace(/"/g, '\\"') + '"' : arg;
 }
 
+// Returns { findings: [...], phase: string|null }
 function callCLI(conversationText) {
   try {
     const prompt = `${ANALYSIS_PROMPT}\n\n---\n\n${conversationText}`;
-    // Nested session must stay a plain completion: no tools/MCP (it wandered
-    // the codebase and hit the timeout), no transcript, no plugin hooks (they
-    // logged phantom sessions into foreign memory). --bare is not usable: it drops OAuth.
     const cwd = path.join(os.tmpdir(), 'memory-toolkit-watcher');
     fs.mkdirSync(cwd, { recursive: true });
-    const stdout = execSync(
-      [
-        'claude -p',
-        '--model', MODEL,
-        '--output-format', 'json',
-        '--json-schema', jsonSchemaArg(FINDINGS_SCHEMA),
-        '--disable-slash-commands',
-        '--no-session-persistence',
-        '--strict-mcp-config',
-        '--tools ""',
-      ].join(' '),
-      {
-        input: prompt, timeout: 30000, encoding: 'utf8', maxBuffer: 1024 * 1024, cwd,
-        env: { ...process.env, MEMORY_TOOLKIT_NESTED: '1' },
-      }
-    );
+    const options = { input: prompt, timeout: 30000, encoding: 'utf8', maxBuffer: 1024 * 1024, cwd };
+    const stdout = process.platform === 'win32'
+      ? execSync(['claude', ...CLI_ARGS.map(quoteArg)].join(' '), options)
+      : execFileSync('claude', CLI_ARGS, options);
     return extractStructuredOutput(stdout);
   } catch {
     return { findings: [], phase: null, parseError: false, cliError: true };
-  }
-}
-
-function parseFindings(text) {
-  const jsonMatch = text && text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return { findings: [], phase: null, parseError: true };
-  try {
-    const json = JSON.parse(jsonMatch[0]);
-    return { findings: json.findings || [], phase: json.phase || null, parseError: false };
-  } catch {
-    return { findings: [], phase: null, parseError: true };
   }
 }
 
@@ -404,7 +341,7 @@ async function main() {
 
   // Analyze with LLM
   const conversationText = buildConversationText(messages);
-  const llmResult = await callLLM(conversationText);
+  const llmResult = callCLI(conversationText);
   const { findings, phase } = llmResult;
   if (llmResult.parseError) {
     parseErrors += 1;
@@ -467,5 +404,5 @@ if (require.main === module) {
   statePath = path.join(memoryDir, '.watcher-state.json');
   main().catch(() => exitJson());
 } else {
-  module.exports = { parseFindings, extractText, readNewMessages, buildConversationText, ANALYSIS_PROMPT, extractStructuredOutput, FINDINGS_SCHEMA };
+  module.exports = { extractText, readNewMessages, buildConversationText, ANALYSIS_PROMPT, extractStructuredOutput, FINDINGS_SCHEMA, CLI_ARGS, quoteArg };
 }

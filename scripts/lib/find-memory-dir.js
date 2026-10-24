@@ -156,10 +156,7 @@ function findMemoryDir(cwd = process.cwd()) {
 
 // For hook scripts: return the dir if it exists, else exit(0) silently.
 // Hooks must not crash if memory isn't set up yet.
-// Also exits inside the watcher's nested `claude -p`: its hooks must not
-// log sessions or write notes into whatever memory its cwd resolves to.
 function findMemoryDirOrExit() {
-  if (process.env.MEMORY_TOOLKIT_NESTED) process.exit(0);
   const { dir, exists } = findMemoryDir();
   if (!exists) process.exit(0);
   return dir;

@@ -9,74 +9,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 
-const { parseFindings, extractText, readNewMessages, buildConversationText, ANALYSIS_PROMPT, extractStructuredOutput, FINDINGS_SCHEMA } = require('../scripts/session-watcher');
-
-// --- parseFindings ---
-
-describe('parseFindings', () => {
-  it('parses valid JSON with findings and phase', () => {
-    const input = '{"findings": [{"type": "decision", "summary": "chose REST over gRPC"}], "phase": "planning"}';
-    const result = parseFindings(input);
-    assert.equal(result.findings.length, 1);
-    assert.equal(result.findings[0].type, 'decision');
-    assert.equal(result.phase, 'planning');
-  });
-
-  it('parses JSON wrapped in markdown code block', () => {
-    const input = '```json\n{"findings": [{"type": "correction", "summary": "fix"}], "phase": "debug"}\n```';
-    const result = parseFindings(input);
-    assert.equal(result.findings.length, 1);
-    assert.equal(result.findings[0].type, 'correction');
-    assert.equal(result.phase, 'debug');
-  });
-
-  it('returns empty on no findings', () => {
-    const input = '{"findings": [], "phase": null}';
-    const result = parseFindings(input);
-    assert.equal(result.findings.length, 0);
-    assert.equal(result.phase, null);
-  });
-
-  it('returns empty on garbage input', () => {
-    const result = parseFindings('not json at all');
-    assert.equal(result.findings.length, 0);
-    assert.equal(result.phase, null);
-  });
-
-  it('returns empty on empty string', () => {
-    const result = parseFindings('');
-    assert.equal(result.findings.length, 0);
-    assert.equal(result.phase, null);
-  });
-
-  it('handles missing phase field', () => {
-    const input = '{"findings": [{"type": "plan", "summary": "do X then Y"}]}';
-    const result = parseFindings(input);
-    assert.equal(result.findings.length, 1);
-    assert.equal(result.phase, null);
-  });
-
-  it('handles missing findings field', () => {
-    const input = '{"phase": "implementation"}';
-    const result = parseFindings(input);
-    assert.equal(result.findings.length, 0);
-    assert.equal(result.phase, 'implementation');
-  });
-
-  it('extracts JSON from prose preamble', () => {
-    const input = 'Sure, here is the analysis:\n{"findings": [{"type": "decision", "summary": "use Haiku"}], "phase": "planning"}';
-    const result = parseFindings(input);
-    assert.equal(result.findings.length, 1);
-    assert.equal(result.phase, 'planning');
-  });
-
-  it('returns empty on prose without any JSON', () => {
-    const input = 'I did not find anything worth saving in this conversation.';
-    const result = parseFindings(input);
-    assert.equal(result.findings.length, 0);
-    assert.equal(result.phase, null);
-  });
-});
+const { extractText, readNewMessages, buildConversationText, ANALYSIS_PROMPT, extractStructuredOutput, FINDINGS_SCHEMA, CLI_ARGS, quoteArg } = require('../scripts/session-watcher');
 
 // --- extractStructuredOutput ---
 
@@ -120,6 +53,45 @@ describe('extractStructuredOutput', () => {
     const res = extractStructuredOutput(envelope);
     assert.equal(res.parseError, true);
   });
+});
+
+// --- claude CLI invocation ---
+
+describe('CLI_ARGS', () => {
+  it('runs the nested claude in safe mode, without tools or a transcript', () => {
+    for (const flag of ['-p', '--safe-mode', '--no-session-persistence', '--strict-mcp-config', '--disable-slash-commands']) {
+      assert.ok(CLI_ARGS.includes(flag), flag);
+    }
+    assert.equal(CLI_ARGS[CLI_ARGS.indexOf('--tools') + 1], '');
+    assert.deepEqual(JSON.parse(CLI_ARGS[CLI_ARGS.indexOf('--json-schema') + 1]), FINDINGS_SCHEMA);
+  });
+});
+
+describe('quoteArg (Windows command line)', () => {
+  it('leaves plain args alone', () => {
+    assert.equal(quoteArg('--safe-mode'), '--safe-mode');
+    assert.equal(quoteArg('claude-haiku-5-5'), 'claude-haiku-5-5');
+  });
+
+  it('quotes empty args and escapes inner quotes', () => {
+    assert.equal(quoteArg(''), '""');
+    assert.equal(quoteArg('{"a":1}'), '"{\\"a\\":1}"');
+  });
+});
+
+// The Anthropic directory holds versions that read a credential from the user's
+// environment or forward the whole environment to a subprocess.
+describe('no credential reads in plugin scripts', () => {
+  const scriptsDir = path.join(__dirname, '..', 'scripts');
+  const files = [...fs.readdirSync(scriptsDir), ...fs.readdirSync(path.join(scriptsDir, 'lib')).map(f => `lib/${f}`)]
+    .filter(f => f.endsWith('.js'));
+  for (const file of files) {
+    it(file, () => {
+      const src = fs.readFileSync(path.join(scriptsDir, file), 'utf8');
+      assert.ok(!/ANTHROPIC_API_KEY|API_KEY|_TOKEN\b/.test(src), 'reads a credential');
+      assert.ok(!/\.\.\.process\.env/.test(src), 'forwards the whole environment');
+    });
+  }
 });
 
 // --- FINDINGS_SCHEMA ---

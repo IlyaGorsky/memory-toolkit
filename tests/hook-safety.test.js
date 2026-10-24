@@ -610,19 +610,15 @@ describe('axis-4: uncaught exception paths', () => {
     });
   });
 
-  it('session-watcher: unreachable API endpoint', () => {
+  it('session-watcher: claude CLI not on PATH', () => {
     withSandbox({ withPriorSession: true }, ({ home, projectDir }) => {
       const r = runHook('session-watcher.js', payload(), {
-        env: {
-          HOME: home,
-          ANTHROPIC_API_KEY: 'sk-dummy',
-          ANTHROPIC_BASE_URL: 'http://127.0.0.1:1',
-          MEMORY_TOOLKIT_WATCHER_FORCE: '1',
-        },
+        env: { HOME: home, PATH: '/usr/bin:/bin' },
         cwd: projectDir,
         timeout: 15000,
       });
       assertControlled(r);
+      assert.equal(r.exitCode, 0, r.stderr);
     });
   });
 
@@ -814,18 +810,4 @@ describe('commit-note.js', () => {
       assert.ok(!notesOf(memoryDir).includes('COMMIT:'));
     });
   });
-});
-
-describe('nested watcher session (MEMORY_TOOLKIT_NESTED)', () => {
-  for (const hook of ['session-log.js', 'session-save.js']) {
-    it(`${hook} is a silent no-op`, () => {
-      withSandbox(({ home, memoryDir, projectDir }) => {
-        const before = snapshotFS(memoryDir);
-        const r = runHook(hook, payload(), { env: { HOME: home, MEMORY_TOOLKIT_NESTED: '1' }, cwd: projectDir });
-        assert.equal(r.exitCode, 0, r.stderr);
-        assert.equal(r.stdout.trim(), '');
-        assert.deepEqual(diffFS(before, snapshotFS(memoryDir)), diffFS(before, before));
-      });
-    });
-  }
 });

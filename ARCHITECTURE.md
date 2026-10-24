@@ -110,7 +110,7 @@ Hooks run automatically on CC events, outside the user's attention:
 - **`SubagentStop`** — same watcher for subagent turns
 - **`PreCompact`** — `session-save.js` captures branch + commit + uncommitted files before compaction destroys them
 
-The watcher fills the gap left by CC's `extractMemories` being feature-flag-gated OFF in public builds. It's an optional layer (`ANTHROPIC_API_KEY` or `claude` CLI required) but high-ROI when active.
+The watcher fills the gap left by CC's `extractMemories` being feature-flag-gated OFF in public builds. It's an optional layer (needs the `claude` CLI, Claude Code 2.1.169+; it runs `claude -p --safe-mode` with the login Claude Code already has, so the plugin never touches credentials) but high-ROI when active.
 
 ### Utility layer (CLI)
 

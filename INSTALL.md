@@ -2,7 +2,9 @@
 
 ## Quick start
 
-Two commands — Claude Code clones the repo, registers it as a marketplace, and installs the plugin:
+**Anthropic plugin directory.** In Claude Code, run `/plugin directory` (Claude Code 2.1.287+) and pick **memory-toolkit**; on claude.ai or in the desktop app, use **Customize → Plugins → Discover**. Directory versions are reviewed by Anthropic, so they can lag behind GitHub.
+
+**From GitHub.** Two commands — Claude Code clones the repo, registers it as a marketplace, and installs the plugin:
 
 ```bash
 claude plugin marketplace add IlyaGorsky/memory-toolkit
@@ -69,9 +71,8 @@ The plugin provides skills (`/session-start`, `/memory`, `/reflect`, etc.) and h
 
    Or copy manually:
    ```bash
-   # Find your project's memory dir
-   PROJ_KEY=$(git rev-parse --show-toplevel | tr '/.' '-' | sed 's/^-//')
-   MEM_DIR="$HOME/.claude/projects/-${PROJ_KEY}/memory"
+   # Find your project's memory dir — the folder Claude Code's auto-memory uses
+   MEM_DIR=$(node /path/to/memory-toolkit/scripts/memory.js dir)
 
    # Copy memory.js
    cp /path/to/memory-toolkit/scripts/memory.js "$MEM_DIR/"
