@@ -395,7 +395,7 @@ describe('memory.js', () => {
     });
   });
 
-  describe('identity', () => {
+  describe('workstream cards', () => {
     const day = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const NOTE_HEAD = '---\nname: Notes\ntype: project\n---\n\n';
 
@@ -403,7 +403,7 @@ describe('memory.js', () => {
       fs.writeFileSync(path.join(TMP, 'workstreams.json'), JSON.stringify(obj));
     }
     function writeContent(content) {
-      const p = path.join(TMP, 'identity-content.md');
+      const p = path.join(TMP, 'card-content.md');
       fs.writeFileSync(p, content);
       return p;
     }
@@ -416,38 +416,37 @@ describe('memory.js', () => {
         fs.appendFileSync(file, `- 10:0${i % 10} WATCH:DECISION: ${topic} decision ${i}\n`);
       }
     }
+    function card(ws, { updated, body = 'body', description = `${ws} card` }) {
+      writeFile(`workstreams/${ws}.md`, `---\nname: ${ws}\ndescription: ${description}\nmetadata:\n  modified: ${updated}T12:00:00.000Z\n---\n${body}`);
+    }
     const signals = () => JSON.parse(run('signals'));
 
-    it('prints NO_IDENTITY when there is no card', () => {
-      assert.equal(run('identity viewer'), 'NO_IDENTITY');
+    it('prints NO_CARD when there is no card', () => {
+      assert.equal(run('card viewer'), 'NO_CARD');
     });
 
-    it('write-identity adds identity frontmatter and identity prints it', () => {
-      const out = run(`write-identity --workstream=viewer --content=${writeContent('## What is this\nRead-only viewer\n')}`);
+    it('write-card writes workstreams/<name>.md with frontmatter, card prints it', () => {
+      const out = run(`write-card --workstream=viewer --content=${writeContent('## What is this\nRead-only viewer\n')}`);
 
-      assert.ok(out.includes('workstreams/viewer/workstream.md'));
-      const printed = run('identity viewer');
-      assert.ok(printed.includes('type: project'));
-      assert.ok(printed.includes('category: identity'));
+      assert.ok(out.includes('workstreams/viewer.md'));
+      const printed = run('card viewer');
+      assert.ok(printed.includes('category: workstream'));
+      assert.ok(printed.includes('modified:'));
       assert.ok(printed.includes('Read-only viewer'));
     });
 
-    it('reads a legacy flat card', () => {
-      writeFile('workstreams/avito.md', '---\nname: Avito\ndescription: old card\ntype: project\n---\nprototype');
-
-      assert.ok(run('identity avito').includes('prototype'));
-    });
-
-    it('--material lists the decisions routed to the workstream, newest first', () => {
+    it('--material lists the routed decisions newest first and marks the card update', () => {
       workstreams({ viewer: ['viewer'], docs: ['docs-reflect'] });
-      writeFile(`notes/${day(2)}.md`, `${NOTE_HEAD}- 10:00 WATCH:DECISION: viewer stays read-only\n- 10:05 WATCH:DECISION: docs-reflect keeps a marker\n`);
+      card('viewer', { updated: day(2), body: 'stays read-only' });
+      writeFile(`notes/${day(3)}.md`, `${NOTE_HEAD}- 10:00 WATCH:DECISION: viewer old decision\n- 10:05 WATCH:DECISION: docs-reflect keeps a marker\n`);
       writeFile(`notes/${day(1)}.md`, `${NOTE_HEAD}- 09:00 REFLECT: viewer exposed a bug\n- 09:05 WATCH:PLAN: viewer plan is not a decision\n`);
 
-      const out = run('identity viewer --material');
+      const out = run('card viewer --material');
 
-      assert.ok(out.includes('NO_IDENTITY'));
+      assert.ok(out.includes(`Current card (updated ${day(2)})`));
       assert.ok(out.includes('Decisions, corrections, reflections (2'));
-      assert.ok(out.indexOf('viewer exposed a bug') < out.indexOf('viewer stays read-only'));
+      const marker = out.indexOf(`— card updated ${day(2)} —`);
+      assert.ok(out.indexOf('viewer exposed a bug') < marker && marker < out.indexOf('viewer old decision'));
       assert.ok(!out.includes('docs-reflect keeps a marker'));
       assert.ok(!out.includes('plan is not a decision'));
     });
@@ -465,28 +464,39 @@ describe('memory.js', () => {
       assert.ok(run('unassigned --days=60').includes('old unrelated'));
     });
 
-    it('signals an identity gap for an active workstream without a card', () => {
+    it('signals a gap for an active workstream without a card', () => {
       workstreams({ viewer: ['viewer'], quiet: ['quiet'] });
       decisions('viewer', 8, 1);
       decisions('quiet', 8, 40); // as many decisions, none in the last 30 days
 
       const s = signals();
 
-      assert.deepEqual(s.identityGaps.map(g => g.workstream), ['viewer']);
-      assert.equal(s.identityGaps[0].recent, 8);
+      assert.deepEqual(s.cardGaps.map(g => [g.workstream, g.card]), [['viewer', false]]);
+      assert.equal(s.cardGaps[0].recent, 8);
+      assert.deepEqual(s.cardGaps[0].related, []);
     });
 
-    it('a written identity closes the gap; a legacy card does not', () => {
-      workstreams({ viewer: ['viewer'], avito: ['avito'] });
-      decisions('viewer', 8, 1);
+    it('names files that may be the card under another name', () => {
+      workstreams({ avito: ['avito'] });
       decisions('avito', 8, 1);
-      run(`write-identity --workstream=viewer --content=${writeContent('---\nname: viewer\ndescription: Read-only viewer\ntype: project\n---\nbody')}`);
-      writeFile('workstreams/avito.md', '---\nname: Avito\ntype: project\n---\nold card');
+      writeFile('workstreams/avito-prototype.md', '---\nname: Avito prototype\n---\nbody');
+      writeFile('workstreams/avitoish.md', '---\nname: other\n---\nbody');
+
+      assert.deepEqual(signals().cardGaps[0].related, ['avito-prototype.md']);
+    });
+
+    it('a current card closes the gap and joins the index; an outrun card is flagged', () => {
+      workstreams({ viewer: ['viewer'], search: ['search'] });
+      decisions('viewer', 8, 1);
+      decisions('search', 8, 1);
+      card('viewer', { updated: day(0), description: 'Read-only viewer' });
+      card('search', { updated: day(20) });
 
       const s = signals();
 
-      assert.deepEqual(s.identityGaps.map(g => [g.workstream, g.legacy]), [['avito', true]]);
-      assert.deepEqual(s.identities, [{ workstream: 'viewer', description: 'Read-only viewer' }]);
+      assert.deepEqual(s.cardGaps.map(g => [g.workstream, g.card, g.sinceCard]), [['search', true, 8]]);
+      assert.deepEqual(s.cards.map(c => c.workstream).sort(), ['search', 'viewer']);
+      assert.ok(s.cards.some(c => c.description === 'Read-only viewer'));
     });
 
     it('suggests a new workstream only for decisions spread over several days', () => {
@@ -509,25 +519,25 @@ describe('memory.js', () => {
       run('signals --mark-reviewed');
       const s = signals();
 
-      assert.deepEqual(s.identityGaps, []);
+      assert.deepEqual(s.cardGaps, []);
       assert.equal(s.unassigned.items, 0);
     });
 
-    it('workstreams marks which ones have an identity', () => {
+    it('workstreams shows when each card was updated', () => {
       workstreams({ viewer: ['viewer'], docs: ['docs'] });
-      run(`write-identity --workstream=viewer --content=${writeContent('body')}`);
+      card('viewer', { updated: '2026-10-20' });
 
       const out = run('workstreams');
 
-      assert.ok(/viewer .*identity ✓/.test(out));
-      assert.ok(/docs .*no identity/.test(out));
+      assert.ok(/viewer .*card: 2026-10-20/.test(out));
+      assert.ok(/docs .*no card/.test(out));
     });
 
-    it('health warns when an identity card grows into a log', () => {
+    it('health warns when a card outgrows a read', () => {
       workstreams({ viewer: ['viewer'] });
-      run(`write-identity --workstream=viewer --content=${writeContent(Array(60).fill('- line').join('\n'))}`);
+      run(`write-card --workstream=viewer --content=${writeContent(Array(160).fill('- line').join('\n'))}`);
 
-      assert.ok(run('health').includes('workstreams/viewer/workstream.md is'));
+      assert.ok(run('health').includes('workstreams/viewer.md is'));
     });
   });
 

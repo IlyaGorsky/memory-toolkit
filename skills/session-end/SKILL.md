@@ -147,7 +147,7 @@ On next start — /session-start will pick up the context.
 ## Rules
 
 - Handoff = concise, 20-30 lines maximum
-- Don't touch `workstreams/<name>/workstream.md` (identity): it changes only when what the workstream *is* changes, by an explicit `write-identity`
+- Workstream cards (`workstreams/<name>.md`) are kept current during work. If the session moved a workstream and its card lags, offer the update — write only with the user's yes (`write-card`)
 - Model recommendation — based on the type of the next task
 - If there's nothing to save — say so, don't create an empty handoff
 - Phases 2 and 3 can be skipped if the user requests a quick finish

@@ -23,10 +23,10 @@
  *   node memory.js session-changes                                   — git commits + files since session start (JSON)
  *   node memory.js handoff [<workstream>]                            — print per-ws handoff if exists, else global, else NO_HANDOFF
  *   node memory.js write-handoff --workstream=<name>|--global --content=<f> — write workstreams/<name>/handoff.md (stamps modified + branch)
- *   node memory.js identity <workstream> [--material]                — identity card, else NO_IDENTITY (--material: + decisions to draft it from)
- *   node memory.js write-identity --workstream=<name> --content=<f>  — write workstreams/<name>/workstream.md
+ *   node memory.js card <workstream> [--material]                    — workstream card, else NO_CARD (--material: + decisions to draft or update it from)
+ *   node memory.js write-card --workstream=<name> --content=<f>      — write workstreams/<name>.md
  *   node memory.js unassigned [--days=30]                            — decisions that match no workstream, by day
- *   node memory.js signals [--branch=<b>] [--mark-reviewed]          — identity gaps, new-workstream signal, branch match (JSON, for SessionStart)
+ *   node memory.js signals [--branch=<b>] [--mark-reviewed]          — card gaps, new-workstream signal, branch match (JSON, for SessionStart)
  *   node memory.js dir                                               — memory directory path
  */
 
@@ -566,19 +566,19 @@ function listWorkstreams() {
         }
         const weights = files.map(f => calculateWeight(f, weightConfig)).sort((a, b) => b - a);
         const score = weights.slice(0, 5).reduce((sum, w) => sum + w, 0);
-        const identity = readIdentity(name);
-        return { name, keywords, files, lastTouched, handoff, score, identity };
+        const card = readCard(name);
+        return { name, keywords, files, lastTouched, handoff, score, card };
     });
 
     enriched.sort((a, b) => b.score - a.score);
 
     console.log('\nWorkstreams (sorted by top-5 weight concentration):\n');
-    enriched.forEach(({ name, keywords, files, lastTouched, handoff, score, identity }, i) => {
+    enriched.forEach(({ name, keywords, files, lastTouched, handoff, score, card }, i) => {
         const lastDate = lastTouched ? lastTouched.toISOString().slice(0, 10) : '—';
         const handoffDate = handoff ? handoff.mtime.toISOString().slice(0, 10) : null;
         const handoffLabel = handoff ? `, handoff: ${handoffDate}${handoff.source === 'global' ? ' (global)' : ''}` : '';
-        const identityLabel = identity ? (identity.legacy ? ', identity: legacy card' : ', identity ✓') : ', no identity';
-        console.log(`  ${i + 1}. ${name} — ${files.length} files, score: ${score.toFixed(1)}, last touched: ${lastDate}${handoffLabel}${identityLabel}`);
+        const cardLabel = card ? `, card: ${card.updated}` : ', no card';
+        console.log(`  ${i + 1}. ${name} — ${files.length} files, score: ${score.toFixed(1)}, last touched: ${lastDate}${handoffLabel}${cardLabel}`);
         console.log(`     keywords: ${keywords.join(', ')}`);
     });
     console.log(`\n  ➕ Add new: memory.js add-workstream <name> <keywords...>`);
@@ -705,13 +705,13 @@ function health() {
         } catch {}
     }
 
-    // 7. Identity is a card, not a log: history belongs in handoff.md and notes/
+    // 7. A card past its size stops being read whole
     for (const ws of Object.keys(WORKSTREAM_ALIASES)) {
-        const identity = readIdentity(ws);
-        if (!identity || identity.legacy) continue;
-        const lines = getBody(identity.content).split('\n').length;
-        if (lines > IDENTITY_MAX_LINES) {
-            issues.push({ level: 'warn', check: 'identity-size', message: `workstreams/${ws}/workstream.md is ${lines} lines (max ${IDENTITY_MAX_LINES}): keep the card, move history to handoff` });
+        const card = readCard(ws);
+        if (!card) continue;
+        const lines = getBody(card.content).split('\n').length;
+        if (lines > CARD_MAX_LINES) {
+            issues.push({ level: 'warn', check: 'card-size', message: `workstreams/${ws}.md is ${lines} lines (max ${CARD_MAX_LINES}): move finished iterations out, keep what is current` });
         }
     }
 
@@ -828,19 +828,21 @@ function classify(...args) {
     console.log(JSON.stringify(classifyItems(items), null, 2));
 }
 
-// --- Identity ---
+// --- Workstream cards ---
 
-// workstreams/<ws>/workstream.md: what the workstream is, why, what it doesn't do.
-// It is distilled from decisions sessions already logged (WATCH:DECISION/CORRECTION,
-// REFLECT) rather than asked for by a ritual — in tms, /session-start ran in 3 of
-// 525 sessions, the watcher in all of them.
-const IDENTITY_MAX_LINES = 40;
-const IDENTITY_MATERIAL_LIMIT = 60;
+// workstreams/<ws>.md is a living card: what the workstream is (a task, an experiment,
+// an area), why, what it doesn't do, where results live, what's open. The model keeps
+// it current during work and drafts it from decisions sessions already logged
+// (WATCH:DECISION/CORRECTION, REFLECT). In tms such cards carried the context, not
+// ritual handoffs: /session-start ran in 3 of 525 sessions (decisions/value-in-the-moment).
+const CARD_MAX_LINES = 150;
+const CARD_MATERIAL_LIMIT = 60;
 // SessionStart signals, calibrated on real memory 2026-10-24: a one-off session
 // leaves too few decisions, or all on one day, to suggest anything.
 const SIGNAL_WINDOW_DAYS = 30;
-const IDENTITY_MIN_DECISIONS = 8;
-const IDENTITY_MIN_RECENT = 3;
+const CARD_MIN_DECISIONS = 8;
+const CARD_MIN_RECENT = 3;
+const CARD_BEHIND_DECISIONS = 5;
 const NEW_WORKSTREAM_MIN_ITEMS = 10;
 const NEW_WORKSTREAM_MIN_DAYS = 3;
 // Workstreams are optional — the notes and the watcher help without any. The model
@@ -848,15 +850,14 @@ const NEW_WORKSTREAM_MIN_DAYS = 3;
 // decisions after it, so a declined offer comes back only once new decisions pile up.
 const WORKSTREAMS_REVIEWED = 'WORKSTREAMS_REVIEWED';
 
-// A flat workstreams/<ws>.md card predates per-workstream folders. It is read as
-// identity but flagged: such cards tend to grow into logs.
-function readIdentity(ws) {
-    const own = path.join(MEMORY_DIR, 'workstreams', ws, 'workstream.md');
-    const legacy = path.join(MEMORY_DIR, 'workstreams', `${ws}.md`);
-    for (const [file, isLegacy] of [[own, false], [legacy, true]]) {
-        if (fs.existsSync(file)) return { file, legacy: isLegacy, content: fs.readFileSync(file, 'utf-8') };
-    }
-    return null;
+function readCard(ws) {
+    const file = path.join(MEMORY_DIR, 'workstreams', `${ws}.md`);
+    if (!fs.existsSync(file)) return null;
+    const content = fs.readFileSync(file, 'utf-8');
+    // `modified` (memory.js and CC's stamper set it), else mtime — which hits bump
+    const modified = Date.parse(parseFrontmatter(content).modified);
+    const updated = new Date(Number.isNaN(modified) ? fs.statSync(file).mtimeMs : modified).toISOString().slice(0, 10);
+    return { file, content, updated };
 }
 
 function queryDecisionLog() {
@@ -884,33 +885,32 @@ function daysAgo(days) {
     return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-function printIdentity(...args) {
+function printCard(...args) {
     const ws = (args.find(a => a && !a.startsWith('--')) || '').trim();
     if (!/^[a-zA-Z0-9_-]+$/.test(ws)) {
-        console.error('Usage: memory.js identity <workstream> [--material]');
+        console.error('Usage: memory.js card <workstream> [--material]');
         process.exit(1);
     }
-    const identity = readIdentity(ws);
+    const card = readCard(ws);
     if (!args.includes('--material')) {
-        if (!identity) return console.log('NO_IDENTITY');
-        return process.stdout.write(identity.content);
+        if (!card) return console.log('NO_CARD');
+        return process.stdout.write(card.content);
     }
 
     const decisions = queryDecisionLog().filter(d => matchWorkstreams(d.text).includes(ws)).reverse();
-    console.log(`# Identity material: ${ws}\n`);
+    console.log(`# Card material: ${ws}\n`);
     console.log(`keywords: ${[].concat(WORKSTREAM_ALIASES[ws] || []).join(', ') || '—'}\n`);
-    console.log('## Current identity\n');
-    if (!identity) {
-        console.log('NO_IDENTITY\n');
-    } else {
-        const lines = getBody(identity.content).split('\n');
-        const shown = lines.slice(0, IDENTITY_MAX_LINES * 2).join('\n');
-        const more = lines.length > IDENTITY_MAX_LINES * 2 ? `\n… ${lines.length - IDENTITY_MAX_LINES * 2} more lines` : '';
-        console.log(`${identity.legacy ? `(legacy card workstreams/${ws}.md)\n\n` : ''}${shown}${more}\n`);
-    }
+    console.log(card ? `## Current card (updated ${card.updated})\n\n${getBody(card.content)}\n` : '## Current card\n\nNO_CARD\n');
     console.log(`## Decisions, corrections, reflections (${decisions.length}, newest first)\n`);
-    for (const d of decisions.slice(0, IDENTITY_MATERIAL_LIMIT)) console.log(`- ${d.date} ${d.kind}: ${d.text}`);
-    if (decisions.length > IDENTITY_MATERIAL_LIMIT) console.log(`\n… ${decisions.length - IDENTITY_MATERIAL_LIMIT} older not shown`);
+    let marked = !card;
+    for (const d of decisions.slice(0, CARD_MATERIAL_LIMIT)) {
+        if (!marked && d.date <= card.updated) {
+            console.log(`— card updated ${card.updated} —`);
+            marked = true;
+        }
+        console.log(`- ${d.date} ${d.kind}: ${d.text}`);
+    }
+    if (decisions.length > CARD_MATERIAL_LIMIT) console.log(`\n… ${decisions.length - CARD_MATERIAL_LIMIT} older not shown`);
 }
 
 function printUnassigned(...args) {
@@ -934,6 +934,7 @@ function printUnassigned(...args) {
 // What the SessionStart hook turns into instructions for the model.
 function workstreamSignals(branch = '') {
     const since = daysAgo(SIGNAL_WINDOW_DAYS);
+    const cards = Object.fromEntries(Object.keys(WORKSTREAM_ALIASES).map(ws => [ws, readCard(ws)]));
     const counts = {};
     const unassigned = [];
     for (const d of queryDecisionLog()) {
@@ -941,37 +942,47 @@ function workstreamSignals(branch = '') {
         const fresh = d.date >= since && !d.reviewed;
         if (!hits.length && fresh) unassigned.push(d);
         for (const ws of hits) {
-            const c = counts[ws] || (counts[ws] = { total: 0, recent: 0 });
+            const c = counts[ws] || (counts[ws] = { total: 0, recent: 0, sinceCard: 0 });
             c.total++;
             if (fresh) c.recent++;
+            if (fresh && cards[ws] && d.date > cards[ws].updated) c.sinceCard++;
         }
     }
 
-    const identityGaps = Object.entries(counts)
-        .filter(([, c]) => c.total >= IDENTITY_MIN_DECISIONS && c.recent >= IDENTITY_MIN_RECENT)
-        .map(([workstream, c]) => ({ workstream, ...c, identity: readIdentity(workstream) }))
-        .filter(g => !g.identity || g.identity.legacy)
+    // A workstream with no card yet, or a card the decisions have outrun. Without a
+    // card, files named <ws>-*.md may be its card under another name — say so rather
+    // than invite a duplicate.
+    const wsDir = path.join(MEMORY_DIR, 'workstreams');
+    const wsFiles = fs.existsSync(wsDir) ? fs.readdirSync(wsDir).filter(f => f.endsWith('.md')) : [];
+    const cardGaps = Object.entries(counts)
+        .map(([workstream, c]) => ({ workstream, ...c, card: Boolean(cards[workstream]) }))
+        .filter(g => g.card
+            ? g.sinceCard >= CARD_BEHIND_DECISIONS
+            : g.total >= CARD_MIN_DECISIONS && g.recent >= CARD_MIN_RECENT)
         .sort((a, b) => b.recent - a.recent)
-        .map(({ workstream, total, recent, identity }) => ({ workstream, total, recent, legacy: Boolean(identity) }));
-    const identities = Object.keys(WORKSTREAM_ALIASES)
-        .map(ws => [ws, readIdentity(ws)])
-        .filter(([, identity]) => identity && !identity.legacy)
-        .map(([workstream, identity]) => ({ workstream, description: parseFrontmatter(identity.content).description || '' }));
+        .map(g => (g.card ? g : { ...g, related: wsFiles.filter(f => f.startsWith(`${g.workstream}-`)) }));
+    // One line per card at every session start: keep it short
+    const cardIndex = Object.entries(cards)
+        .filter(([, card]) => card)
+        .map(([workstream, card]) => {
+            const description = (parseFrontmatter(card.content).description || '').replace(/^"(.*)"$/, '$1');
+            return { workstream, description: description.length > 120 ? `${description.slice(0, 119)}…` : description };
+        });
     const days = new Set(unassigned.map(d => d.date)).size;
     // Workstreams the branch name points to, if there is anything to continue
     const branchWorkstreams = (branch ? matchWorkstreams(branch) : [])
         .map(ws => ({
             workstream: ws,
-            identity: Boolean(readIdentity(ws)),
+            card: Boolean(cards[ws]),
             handoff: fs.existsSync(path.join(MEMORY_DIR, 'workstreams', ws, 'handoff.md')),
         }))
-        .filter(w => w.identity || w.handoff);
+        .filter(w => w.card || w.handoff);
 
     return {
         windowDays: SIGNAL_WINDOW_DAYS,
-        identities,
+        cards: cardIndex,
         branchWorkstreams,
-        identityGaps,
+        cardGaps,
         unassigned: {
             items: unassigned.length,
             days,
@@ -1090,8 +1101,9 @@ function printHandoff(...args) {
 // `--global` writes workstreams/handoff.md.
 function writeHandoff(...args) {
     const branch = currentBranch();
-    writeWorkstreamFile('write-handoff', 'handoff.md', args, {
+    writeWorkstreamFile('write-handoff', args, {
         global: args.includes('--global'),
+        relFor: ws => (ws ? `workstreams/${ws}/handoff.md` : 'workstreams/handoff.md'),
         frontmatterFor: ws => ws
             ? `---\nname: ${ws} handoff\ndescription: Per-workstream handoff for ${ws}\ntype: project\n---\n`
             : '---\nname: Session handoff\ndescription: Context for starting the next session\ntype: project\n---\n',
@@ -1099,9 +1111,10 @@ function writeHandoff(...args) {
     });
 }
 
-function writeIdentity(...args) {
-    writeWorkstreamFile('write-identity', 'workstream.md', args, {
-        frontmatterFor: ws => `---\nname: ${ws}\ndescription: Identity of the ${ws} workstream\ntype: project\ncategory: identity\n---\n`,
+function writeCard(...args) {
+    writeWorkstreamFile('write-card', args, {
+        relFor: ws => `workstreams/${ws}.md`,
+        frontmatterFor: ws => `---\nname: ${ws}\ndescription: Workstream card for ${ws}\ntype: project\ncategory: workstream\n---\n`,
         stamp: { modified: new Date().toISOString() },
     });
 }
@@ -1127,12 +1140,12 @@ function setFrontmatter(content, fields) {
 
 // Node writes the file, so CC's frontmatter stamper (Write/Edit tools only)
 // leaves our keys where they are.
-function writeWorkstreamFile(command, fileName, args, { global = false, frontmatterFor, stamp }) {
+function writeWorkstreamFile(command, args, { global = false, relFor, frontmatterFor, stamp }) {
     const wsArg = args.find(a => a && a.startsWith('--workstream='));
     const contentArg = args.find(a => a && a.startsWith('--content='));
     if ((!wsArg && !global) || !contentArg) {
         console.log(`Usage: memory.js ${command} --workstream=<name> --content=<path-to-md>`);
-        console.log(`  writes to workstreams/<name>/${fileName}`);
+        console.log(`  writes to ${relFor('<name>')}`);
         return;
     }
     const ws = global ? null : wsArg.slice('--workstream='.length).trim();
@@ -1145,7 +1158,7 @@ function writeWorkstreamFile(command, fileName, args, { global = false, frontmat
     try { body = fs.readFileSync(contentPath, 'utf-8'); }
     catch (e) { console.error(`Failed to read content: ${e.message}`); process.exit(1); }
 
-    const rel = global ? `workstreams/${fileName}` : `workstreams/${ws}/${fileName}`;
+    const rel = relFor(ws);
     const out = path.join(MEMORY_DIR, rel);
     fs.mkdirSync(path.dirname(out), { recursive: true });
 
@@ -1173,8 +1186,8 @@ const commands = {
     'session-changes': printSessionChanges,
     'write-handoff': writeHandoff,
     handoff: printHandoff,
-    identity: printIdentity,
-    'write-identity': writeIdentity,
+    card: printCard,
+    'write-card': writeCard,
     unassigned: printUnassigned,
     signals: printSignals,
     recurring: printRecurring,
@@ -1207,10 +1220,10 @@ if (require.main === module) {
         console.log('  session-changes        — git files+commits since session start (JSON)');
         console.log('  write-handoff --workstream=<name>|--global --content=<f>  — write a handoff (stamps modified + branch)');
         console.log('  handoff [<workstream>]  — print per-workstream handoff if exists, else global');
-        console.log('  identity <ws> [--material]  — workstream identity card (--material: decisions to draft it from)');
-        console.log('  write-identity --workstream=<name> --content=<f>  — write workstreams/<name>/workstream.md');
+        console.log('  card <ws> [--material]  — workstream card (--material: decisions to draft or update it from)');
+        console.log('  write-card --workstream=<name> --content=<f>  — write workstreams/<name>.md');
         console.log('  unassigned [--days=30] — decisions that match no workstream, by day');
-        console.log('  signals [--mark-reviewed]  — identity gaps and new-workstream signal (JSON)');
+        console.log('  signals [--branch=<b>] [--mark-reviewed]  — card gaps, new-workstream signal, branch match (JSON)');
         console.log('  recurring              — find recurring feedback patterns');
         console.log('  reindex                — rebuild MEMORY.md index sorted by weight');
         console.log('  health                 — check memory health (dead links, stale, size, dupes)');
@@ -1241,7 +1254,7 @@ module.exports = {
     queryWatchFindings,
     classifyItems,
     matchWorkstreams,
-    readIdentity,
+    readCard,
     queryDecisionLog,
     workstreamSignals,
     sessionActivity,

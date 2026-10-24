@@ -178,16 +178,29 @@ describe('session-log.js', () => {
       assert.ok(output.includes('signals --mark-reviewed'));
     });
 
-    it('lists identities without asking for anything', () => {
+    it('lists cards and asks to keep them current, without an offer', () => {
       fs.writeFileSync(path.join(ctx.memoryDir, 'workstreams.json'), JSON.stringify({ viewer: ['viewer'] }));
-      fs.mkdirSync(path.join(ctx.memoryDir, 'workstreams', 'viewer'), { recursive: true });
-      fs.writeFileSync(path.join(ctx.memoryDir, 'workstreams', 'viewer', 'workstream.md'),
+      fs.mkdirSync(path.join(ctx.memoryDir, 'workstreams'), { recursive: true });
+      fs.writeFileSync(path.join(ctx.memoryDir, 'workstreams', 'viewer.md'),
         '---\nname: viewer\ndescription: Read-only viewer over memory\ntype: project\n---\nbody');
 
       const output = run({ session_id: 's' }, ctx);
 
-      assert.ok(output.includes('Identities: viewer — Read-only viewer over memory'));
+      assert.ok(output.includes('Cards: viewer — Read-only viewer over memory'));
+      assert.ok(output.includes('offer to update its card'));
       assert.ok(!output.includes('--mark-reviewed'));
+    });
+
+    it('flags a card the decisions have outrun', () => {
+      fs.writeFileSync(path.join(ctx.memoryDir, 'workstreams.json'), JSON.stringify({ viewer: ['viewer'] }));
+      fs.mkdirSync(path.join(ctx.memoryDir, 'workstreams'), { recursive: true });
+      fs.writeFileSync(path.join(ctx.memoryDir, 'workstreams', 'viewer.md'),
+        `---\nname: viewer\ndescription: Viewer\nmodified: ${day(20)}T12:00:00.000Z\n---\nbody`);
+      decisions('viewer', 6);
+
+      const context = JSON.parse(run({ session_id: 's' }, ctx)).hookSpecificOutput.additionalContext;
+
+      assert.ok(context.includes('The "viewer" card is behind: 6 decisions'), context);
     });
   });
 

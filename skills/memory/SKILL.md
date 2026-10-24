@@ -2,7 +2,7 @@
 name: memory
 description: Project memory — search, workstreams, notes, decisions. Auto-initializes on first use.
 user-invocable: true
-argument-hint: "<command> [args] [--brief] — search <query> | workstream <name> | workstreams | add-workstream <name> <kw...> | recent [n] | decisions [topic] | list | note <text> | handoff [<ws>] | identity <ws> [--material] | unassigned"
+argument-hint: "<command> [args] [--brief] — search <query> | workstream <name> | workstreams | add-workstream <name> <kw...> | recent [n] | decisions [topic] | list | note <text> | handoff [<ws>] | card <ws> [--material] | unassigned"
 ---
 
 # /memory — Project Memory
@@ -146,18 +146,18 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" write-handoff --global --content=
 ```
 Frontmatter auto-added; `modified` and `branch` are stamped so the SessionStart hook can flag an old or other-branch handoff.
 
-### identity <workstream> [--material]
+### card <workstream> [--material]
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" identity <workstream>             # the card, or NO_IDENTITY
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" identity <workstream> --material  # + decisions to draft it from
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" card <workstream>             # the card, or NO_CARD
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" card <workstream> --material  # + decisions to draft or update it from
 ```
-Identity (`workstreams/<name>/workstream.md`) says what the workstream is, why, and what it doesn't do: What is this / Why / Principles / Not doing / Scope / Status. Draft it from `--material` (decisions, corrections and reflections the watcher already logged), show the draft, write only after the user agrees. Keep it under ~40 lines — history goes to handoff. A flat `workstreams/<name>.md` is read as a legacy card.
+A workstream — a task, an experiment, an area — lives in a card, `workstreams/<name>.md`, kept current during work: what it is, why, what it doesn't do, where results live, what's open — sections as the workstream needs, status in free words. When a decision, an iteration result or an open question about it comes up, offer to update the card; draft from `--material` (decisions, corrections and reflections the watcher logged, newest first, with a marker where the card was last updated). Show the change, write only after the user agrees. Past ~150 lines move finished iterations out.
 
-### write-identity --workstream=<name> --content=<file>
+### write-card --workstream=<name> --content=<file>
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" write-identity --workstream=<name> --content=<path>
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" write-card --workstream=<name> --content=<path>
 ```
-Writes `workstreams/<name>/workstream.md`; adds `type: project`, `category: identity` frontmatter if missing.
+Writes `workstreams/<name>.md` (not the Write tool: CC's stamper would reshuffle the frontmatter); adds `type: project`, `category: workstream` if missing and stamps `modified`.
 
 ### unassigned [--days=30]
 ```bash
@@ -167,7 +167,7 @@ Decisions that match no workstream's keywords, by day — material for proposing
 
 ### signals [--mark-reviewed]
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" signals                  # JSON: identity gaps, new-workstream signal
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" signals                  # JSON: cards, card gaps (none or behind), new-workstream signal
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" signals --mark-reviewed  # after offering, whatever the answer
 ```
 The SessionStart hook turns these into an offer. Workstreams are optional: offer once, then mark reviewed.

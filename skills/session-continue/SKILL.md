@@ -20,10 +20,10 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" handoff "$ARGUMENTS"
 Falls back to global handoff if no per-workstream file exists. Prints `NO_HANDOFF` when neither found.
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" identity "$ARGUMENTS"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" card "$ARGUMENTS"
 ```
 
-What the workstream is and isn't. Read it silently to frame the handoff; `NO_IDENTITY` is fine.
+The workstream's card — what it is, what's open. Read it silently to frame the handoff; `NO_CARD` is fine.
 
 If no handoff exists → suggest `/session-start` instead.
 
