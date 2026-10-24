@@ -25,6 +25,9 @@
  *   node memory.js write-handoff --workstream=<name>|--global --content=<f> — write workstreams/<name>/handoff.md (stamps modified + branch)
  *   node memory.js card <workstream> [--material]                    — workstream card, else NO_CARD (--material: + decisions to draft or update it from)
  *   node memory.js write-card --workstream=<name> --content=<f>      — write workstreams/<name>.md
+ *   node memory.js park --title=<t> --content=<f> [--workstream=<name>] [--kind=idea|task|question] — park with context (one file per item)
+ *   node memory.js parked [<workstream>]                             — parked items, oldest flagged, plus recent PARKED: notes
+ *   node memory.js unpark <file> --to=<where>                        — the exit: remove a parked item, note where it went
  *   node memory.js unassigned [--days=30]                            — decisions that match no workstream, by day
  *   node memory.js signals [--branch=<b>] [--mark-reviewed]          — card gaps, new-workstream signal, branch match (JSON, for SessionStart)
  *   node memory.js dir                                               — memory directory path
@@ -961,12 +964,21 @@ function workstreamSignals(branch = '') {
             : g.total >= CARD_MIN_DECISIONS && g.recent >= CARD_MIN_RECENT)
         .sort((a, b) => b.recent - a.recent)
         .map(g => (g.card ? g : { ...g, related: wsFiles.filter(f => f.startsWith(`${g.workstream}-`)) }));
+    const parked = queryParked();
+    const parkedBy = {};
+    for (const p of parked) if (p.workstream) parkedBy[p.workstream] = (parkedBy[p.workstream] || 0) + 1;
+    const staleParked = parked.filter(p => p.parked < daysAgo(PARKED_STALE_DAYS)).length;
+    const lastReview = lastNoteMarker(WORKSTREAMS_REVIEWED);
     // One line per card at every session start: keep it short
     const cardIndex = Object.entries(cards)
         .filter(([, card]) => card)
         .map(([workstream, card]) => {
             const description = (parseFrontmatter(card.content).description || '').replace(/^"(.*)"$/, '$1');
-            return { workstream, description: description.length > 120 ? `${description.slice(0, 119)}…` : description };
+            return {
+                workstream,
+                description: description.length > 120 ? `${description.slice(0, 119)}…` : description,
+                parked: parkedBy[workstream] || 0,
+            };
         });
     const days = new Set(unassigned.map(d => d.date)).size;
     // Workstreams the branch name points to, if there is anything to continue
@@ -975,20 +987,183 @@ function workstreamSignals(branch = '') {
             workstream: ws,
             card: Boolean(cards[ws]),
             handoff: fs.existsSync(path.join(MEMORY_DIR, 'workstreams', ws, 'handoff.md')),
+            parked: parkedBy[ws] || 0,
         }))
-        .filter(w => w.card || w.handoff);
+        .filter(w => w.card || w.handoff || w.parked);
 
     return {
         windowDays: SIGNAL_WINDOW_DAYS,
         cards: cardIndex,
         branchWorkstreams,
         cardGaps,
+        // Sorting old parked items is offered at most every two weeks
+        parked: {
+            total: parked.length,
+            stale: staleParked,
+            offer: staleParked > 0 && (!lastReview || lastReview < daysAgo(PARKED_REVIEW_PAUSE_DAYS)),
+        },
         unassigned: {
             items: unassigned.length,
             days,
             suggest: unassigned.length >= NEW_WORKSTREAM_MIN_ITEMS && days >= NEW_WORKSTREAM_MIN_DAYS,
         },
     };
+}
+
+// --- Parking ---
+
+// Parked is a state, not a kind of content: an idea, a task, a question set aside
+// with its context to come back to. Unlike an ideas catalog, it has to end — picked
+// up, moved to the backlog or a catalog, or dropped (unpark). One file per item, so
+// CC's recall can surface it by its description when the topic comes back.
+const PARKED_STALE_DAYS = 30;
+const PARKED_REVIEW_PAUSE_DAYS = 14;
+const PARKED_KINDS = ['idea', 'task', 'question'];
+
+function slugify(title) {
+    return title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'parked';
+}
+
+function argValue(args, name) {
+    const arg = args.find(a => a && a.startsWith(`--${name}=`));
+    return arg ? arg.slice(name.length + 3).trim() : '';
+}
+
+function park(...args) {
+    const title = argValue(args, 'title');
+    const contentPath = argValue(args, 'content');
+    const ws = argValue(args, 'workstream');
+    const kind = argValue(args, 'kind');
+    if (!title || !contentPath) {
+        console.log('Usage: memory.js park --title=<title> --content=<path-to-md> [--workstream=<name>] [--kind=idea|task|question]');
+        console.log('  writes workstreams/<name>/<slug>.md, or parked/<slug>.md without a workstream');
+        return;
+    }
+    if ((ws && !/^[a-zA-Z0-9_-]+$/.test(ws)) || (kind && !PARKED_KINDS.includes(kind))) {
+        console.error(`Invalid ${ws && !/^[a-zA-Z0-9_-]+$/.test(ws) ? `workstream name: "${ws}"` : `kind: "${kind}"`}`);
+        process.exit(1);
+    }
+    let body;
+    try { body = fs.readFileSync(contentPath, 'utf-8'); }
+    catch (e) { console.error(`Failed to read content: ${e.message}`); process.exit(1); }
+
+    const dir = ws ? `workstreams/${ws}` : 'parked';
+    fs.mkdirSync(path.join(MEMORY_DIR, dir), { recursive: true });
+    const slug = slugify(title);
+    let rel = `${dir}/${slug}.md`;
+    for (let n = 2; fs.existsSync(path.join(MEMORY_DIR, rel)); n++) rel = `${dir}/${slug}-${n}.md`;
+
+    const now = new Date().toISOString();
+    const withFrontmatter = body.startsWith('---\n') ? body : `---\nname: ${title}\ndescription: ${title}\ntype: project\n---\n\n${body}`;
+    const final = setFrontmatter(withFrontmatter, { category: 'parked', ...(kind && { kind }), parked: now.slice(0, 10), modified: now });
+    fs.writeFileSync(path.join(MEMORY_DIR, rel), final.endsWith('\n') ? final : final + '\n');
+    console.log(`Parked: ${rel}`);
+}
+
+// Parked files, newest first. Files /park wrote into a workstream folder before
+// `category: parked` existed are recognised by its "## Next step" section.
+function queryParked() {
+    const items = [];
+    const add = (rel, workstream) => {
+        const file = path.join(MEMORY_DIR, rel);
+        const content = fs.readFileSync(file, 'utf-8');
+        const fm = parseFrontmatter(content);
+        if (fm.category !== 'parked' && !(workstream && /^## Next step/m.test(content))) return;
+        items.push({
+            file: rel,
+            workstream,
+            title: (fm.name || path.basename(rel, '.md')).replace(/^"(.*)"$/, '$1'),
+            description: (fm.description || '').replace(/^"(.*)"$/, '$1'),
+            kind: fm.kind || '',
+            parked: fm.parked || new Date(fs.statSync(file).mtimeMs).toISOString().slice(0, 10),
+        });
+    };
+    const wsDir = path.join(MEMORY_DIR, 'workstreams');
+    if (fs.existsSync(wsDir)) {
+        for (const entry of fs.readdirSync(wsDir, { withFileTypes: true })) {
+            if (!entry.isDirectory()) continue;
+            for (const f of fs.readdirSync(path.join(wsDir, entry.name))) {
+                if (f.endsWith('.md') && f !== 'handoff.md') add(`workstreams/${entry.name}/${f}`, entry.name);
+            }
+        }
+    }
+    const parkedDir = path.join(MEMORY_DIR, 'parked');
+    if (fs.existsSync(parkedDir)) {
+        for (const f of fs.readdirSync(parkedDir)) if (f.endsWith('.md')) add(`parked/${f}`, null);
+    }
+    return items.sort((a, b) => b.parked.localeCompare(a.parked));
+}
+
+// `PARKED:` note lines — the cheapest parking, kept as it is
+function queryParkedNotes(days) {
+    const notesDir = DIRS.notes;
+    if (!notesDir || !fs.existsSync(notesDir)) return [];
+    const since = daysAgo(days);
+    const results = [];
+    for (const entry of fs.readdirSync(notesDir).filter(f => f.endsWith('.md')).sort().reverse()) {
+        const date = entry.replace('.md', '');
+        if (date < since) break;
+        for (const line of fs.readFileSync(path.join(notesDir, entry), 'utf-8').split('\n')) {
+            const m = line.match(/^- \d{2}:\d{2} PARKED:\s*(.+)$/);
+            if (m) results.push({ date, text: m[1].trim() });
+        }
+    }
+    return results;
+}
+
+function printParked(...args) {
+    const ws = args.find(a => a && !a.startsWith('--')) || '';
+    const items = queryParked().filter(i => !ws || i.workstream === ws);
+    const raw = ws ? [] : queryParkedNotes(PARKED_STALE_DAYS);
+    if (!items.length && !raw.length) return console.log(ws ? `Nothing parked in ${ws}.` : 'Nothing parked.');
+
+    const stale = daysAgo(PARKED_STALE_DAYS);
+    const groups = {};
+    for (const i of items) (groups[i.workstream || 'general'] = groups[i.workstream || 'general'] || []).push(i);
+    console.log(`\n# Parked (${items.length})\n`);
+    for (const [group, list] of Object.entries(groups)) {
+        console.log(`## ${group} (${list.length})`);
+        for (const i of list) {
+            const kind = i.kind ? `[${i.kind}] ` : '';
+            const old = i.parked < stale ? '  ⚠ over 30 days' : '';
+            const desc = i.description && i.description !== i.title ? ` — ${i.description}` : '';
+            console.log(`  ${i.parked} ${kind}${i.title}${desc}\n    ${i.file}${old}`);
+        }
+        console.log('');
+    }
+    if (raw.length) {
+        console.log(`## PARKED notes, last ${PARKED_STALE_DAYS} days (${raw.length})`);
+        for (const r of raw) console.log(`  ${r.date} ${r.text}`);
+        console.log('');
+    }
+}
+
+// The exit: the item was picked up, moved (backlog, decision, ideas catalog) or dropped
+function unpark(...args) {
+    const rel = args.find(a => a && !a.startsWith('--')) || '';
+    const to = argValue(args, 'to');
+    if (!rel || !to) {
+        console.log('Usage: memory.js unpark <parked file, e.g. parked/x.md> --to=<where it went: picked-up | backlog | decision | ideas | drop>');
+        return;
+    }
+    const item = queryParked().find(i => i.file === rel);
+    if (!item) {
+        console.error(`Not a parked item: ${rel} (see memory.js parked)`);
+        process.exit(1);
+    }
+    fs.unlinkSync(path.join(MEMORY_DIR, rel));
+    note(`UNPARKED: ${item.title} → ${to}`);
+}
+
+function lastNoteMarker(marker) {
+    const notesDir = DIRS.notes;
+    if (!notesDir || !fs.existsSync(notesDir)) return null;
+    for (const entry of fs.readdirSync(notesDir).filter(f => f.endsWith('.md')).sort().reverse()) {
+        if (new RegExp(`^- \\d{2}:\\d{2} ${marker}\\b`, 'm').test(fs.readFileSync(path.join(notesDir, entry), 'utf-8'))) {
+            return entry.replace('.md', '');
+        }
+    }
+    return null;
 }
 
 function printSignals(...args) {
@@ -1188,6 +1363,9 @@ const commands = {
     handoff: printHandoff,
     card: printCard,
     'write-card': writeCard,
+    park,
+    parked: printParked,
+    unpark,
     unassigned: printUnassigned,
     signals: printSignals,
     recurring: printRecurring,
@@ -1222,6 +1400,9 @@ if (require.main === module) {
         console.log('  handoff [<workstream>]  — print per-workstream handoff if exists, else global');
         console.log('  card <ws> [--material]  — workstream card (--material: decisions to draft or update it from)');
         console.log('  write-card --workstream=<name> --content=<f>  — write workstreams/<name>.md');
+        console.log('  park --title=<t> --content=<f> [--workstream=<name>] [--kind=idea|task|question]  — park with context');
+        console.log('  parked [<workstream>]  — parked items, oldest flagged, plus recent PARKED: notes');
+        console.log('  unpark <file> --to=<where>  — the exit: remove a parked item, note where it went');
         console.log('  unassigned [--days=30] — decisions that match no workstream, by day');
         console.log('  signals [--branch=<b>] [--mark-reviewed]  — card gaps, new-workstream signal, branch match (JSON)');
         console.log('  recurring              — find recurring feedback patterns');
@@ -1255,6 +1436,7 @@ module.exports = {
     classifyItems,
     matchWorkstreams,
     readCard,
+    queryParked,
     queryDecisionLog,
     workstreamSignals,
     sessionActivity,

@@ -120,6 +120,14 @@ If DOC: notes exist — notify user: "Found N documentation findings. Run /docs-
 
 If called from /session-end — pass control to /docs-reflect automatically.
 
+## 6. Parked items that matured
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" parked
+```
+
+If a parked item became a backlog item, a decision or got done in this session — offer its exit (`unpark <file> --to=<where>`, after moving the content). Don't push old ones that didn't move.
+
 ## Rules
 
 - Don't duplicate what's already in backlog

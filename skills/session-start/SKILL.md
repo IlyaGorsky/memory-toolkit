@@ -95,6 +95,7 @@ If handoff has `lastCommit` ref: show `git log <ref>..HEAD --oneline` (changes s
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" card <name>         # what the workstream is, what's open — NO_CARD if none
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" parked <name>       # what was set aside in it — mention titles in the task plan
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" handoff <name>      # per-workstream handoff if available
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" workstream <name> --brief
 ```

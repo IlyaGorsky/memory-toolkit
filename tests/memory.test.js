@@ -541,6 +541,75 @@ describe('memory.js', () => {
     });
   });
 
+  describe('parking', () => {
+    const day = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    function writeContent(content) {
+      const p = path.join(TMP, 'park-content.md');
+      fs.writeFileSync(p, content);
+      return p;
+    }
+
+    it('parks into the workstream folder, one file per item, stamped as parked', () => {
+      const out = run(`park --title="Auto-approve memory.js calls" --kind=task --workstream=lifecycle --content=${writeContent('## What\ninvestigate allowed-tools\n')}`);
+
+      assert.ok(out.includes('workstreams/lifecycle/auto-approve-memory-js-calls.md'));
+      const written = fs.readFileSync(path.join(TMP, 'workstreams', 'lifecycle', 'auto-approve-memory-js-calls.md'), 'utf8');
+      assert.ok(written.includes('category: parked'));
+      assert.ok(written.includes('kind: task'));
+      assert.ok(written.includes(`parked: ${day(0)}`));
+      assert.ok(written.includes('investigate allowed-tools'));
+    });
+
+    it('parks without a workstream into parked/, and never overwrites', () => {
+      run(`park --title="Shared memory across CLIs" --content=${writeContent('one')}`);
+      const out = run(`park --title="Shared memory across CLIs" --content=${writeContent('two')}`);
+
+      assert.ok(out.includes('parked/shared-memory-across-clis-2.md'));
+      assert.ok(fs.existsSync(path.join(TMP, 'parked', 'shared-memory-across-clis.md')));
+    });
+
+    it('parked lists files, flags old ones, keeps /park files without the category, and recent PARKED notes', () => {
+      writeFile('parked/old.md', `---\nname: Old one\ndescription: waits\ncategory: parked\nparked: ${day(45)}\n---\nbody`);
+      writeFile('workstreams/scaffold/tools-poc.md', '---\nname: Tools PoC\ntype: project\n---\n## What\nx\n## Next step\ny');
+      writeFile('workstreams/scaffold/handoff.md', '---\nname: handoff\n---\n## Next step\nnot parked');
+      writeFile(`notes/${day(2)}.md`, '- 10:00 PARKED: agnostic multi-agent support\n');
+
+      const out = run('parked');
+
+      assert.ok(out.includes('Old one — waits'));
+      assert.ok(out.includes('⚠ over 30 days'));
+      assert.ok(out.includes('workstreams/scaffold/tools-poc.md'));
+      assert.ok(!out.includes('workstreams/scaffold/handoff.md'));
+      assert.ok(out.includes('agnostic multi-agent support'));
+      assert.ok(!run('parked scaffold').includes('Old one'));
+    });
+
+    it('unpark removes the item and notes where it went', () => {
+      run(`park --title="Try Stop hook" --content=${writeContent('x')}`);
+
+      run('unpark parked/try-stop-hook.md --to=backlog');
+
+      assert.ok(!fs.existsSync(path.join(TMP, 'parked', 'try-stop-hook.md')));
+      const notes = fs.readFileSync(path.join(TMP, 'notes', `${day(0)}.md`), 'utf8');
+      assert.ok(notes.includes('UNPARKED: Try Stop hook → backlog'));
+      assert.throws(() => run('unpark notes/whatever.md --to=drop'));
+    });
+
+    it('signals count parked items per card and offer sorting old ones at most every two weeks', () => {
+      fs.writeFileSync(path.join(TMP, 'workstreams.json'), JSON.stringify({ scaffold: ['scaffold'] }));
+      writeFile('workstreams/scaffold.md', '---\nname: scaffold\ndescription: Scaffold\n---\nbody');
+      writeFile('workstreams/scaffold/old.md', `---\nname: Old\ncategory: parked\nparked: ${day(40)}\n---\nbody`);
+
+      let s = JSON.parse(run('signals'));
+      assert.equal(s.cards[0].parked, 1);
+      assert.deepEqual(s.parked, { total: 1, stale: 1, offer: true });
+
+      run('signals --mark-reviewed');
+      s = JSON.parse(run('signals'));
+      assert.equal(s.parked.offer, false);
+    });
+  });
+
   describe('session-changes', () => {
     const today = new Date().toISOString().slice(0, 10);
     const REPO = path.join(__dirname, '.tmp-repo');

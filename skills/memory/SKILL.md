@@ -159,6 +159,14 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" write-card --workstream=<name> --
 ```
 Writes `workstreams/<name>.md` (not the Write tool: CC's stamper would reshuffle the frontmatter); adds `type: project`, `category: workstream` if missing and stamps `modified`.
 
+### park / parked / unpark
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" park --title="<title>" --content=<path> [--workstream=<name>] [--kind=idea|task|question]
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" parked [<workstream>]          # parked items, oldest flagged, plus recent PARKED: notes
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" unpark <file> --to=<where>     # the exit: picked-up | backlog | decision | ideas | drop
+```
+Parked is a state with an exit, not an ideas catalog: one file per item (`workstreams/<name>/<slug>.md`, or `parked/<slug>.md`), so recall can surface it. Use `/park` to draft and confirm.
+
 ### unassigned [--days=30]
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" unassigned
