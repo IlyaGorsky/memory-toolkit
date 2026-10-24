@@ -480,7 +480,7 @@ No — they collaborate. CC auto-memory writes to `MEMORY.md` based on user fact
 
 ### Does anything get uploaded?
 
-By default — no. Memory stays on your disk. The optional `session-watcher` hook can analyze conversation chunks via Haiku through your own `claude -p` (the login Claude Code already uses) — that's the only outbound traffic, and it goes to Anthropic. memory-toolkit never reads API keys or tokens itself. Disable the watcher by removing it from `hooks.json` if you want zero network.
+By default — no. Memory stays on your disk. The optional `session-watcher` hook can analyze conversation chunks via Haiku through your own `claude -p` (the login Claude Code already uses) — that's the only outbound traffic, and it goes to Anthropic. memory-toolkit never reads API keys or tokens itself. Details: [PRIVACY.md](PRIVACY.md). Disable the watcher by removing it from `hooks.json` if you want zero network.
 
 ### Can I use it without hooks?
 
