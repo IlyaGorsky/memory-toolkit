@@ -27,6 +27,8 @@ const MODEL = 'claude-haiku-5-5';
 const MAX_TOKENS = 1024;
 const SUGGEST_REFLECT_THRESHOLD = 8;  // suggest /reflect after N accumulated findings
 const SUGGEST_DOCS_THRESHOLD = 3;     // suggest /docs-reflect after N DOC findings
+const TAIL_BYTES = 4 * 1024 * 1024;   // read at most the transcript's last 4 MB per run
+const MAX_MESSAGES = 40;              // analyze only the newest messages
 
 // --- Runtime state (initialized only when run as main) ---
 let stdinPayload = {};
@@ -35,7 +37,7 @@ let statePath = '';
 
 function loadState() {
   try { return JSON.parse(fs.readFileSync(statePath, 'utf8')); }
-  catch { return { offset: 0, lastRun: 0, transcriptPath: '', findingsCount: 0, docCount: 0, suggestedReflect: false, suggestedDocs: false, parseErrors: 0, cliErrors: 0, lastParseError: null }; }
+  catch { return { byteOffset: null, lastRun: 0, transcriptPath: '', findingsCount: 0, docCount: 0, suggestedReflect: false, suggestedDocs: false, parseErrors: 0, cliErrors: 0, lastParseError: null }; }
 }
 
 function saveState(state) {
@@ -56,15 +58,31 @@ function findTranscript() {
 }
 
 // --- Parse transcript ---
+// Reads complete lines appended since byte `offset` (null: start from the tail).
+// Transcripts reach hundreds of MB (2.1.300+ log every request), and reading a
+// whole one throws past Node's string limit. A line still being written is left
+// for the next run; an offset past the end (file rewritten) starts over.
 function readNewMessages(transcriptPath, offset) {
-  if (!fs.existsSync(transcriptPath)) return { messages: [], newOffset: offset };
+  let fd;
+  try { fd = fs.openSync(transcriptPath, 'r'); } catch { return { messages: [], newOffset: offset ?? 0 }; }
 
-  const content = fs.readFileSync(transcriptPath, 'utf8');
-  const lines = content.split('\n').filter(Boolean);
-  const newLines = lines.slice(offset);
+  let buf, start;
+  try {
+    const size = fs.fstatSync(fd).size;
+    const wanted = offset != null && offset <= size ? offset : 0;
+    start = Math.max(wanted, size - TAIL_BYTES);
+    buf = Buffer.alloc(size - start);
+    fs.readSync(fd, buf, 0, buf.length, start);
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  const begin = start > 0 && start !== offset ? buf.indexOf(0x0a) + 1 : 0;
+  const end = buf.lastIndexOf(0x0a) + 1;
+  const lines = end > begin ? buf.subarray(begin, end).toString('utf8').split('\n').filter(Boolean) : [];
   const messages = [];
 
-  for (const line of newLines) {
+  for (const line of lines) {
     try {
       const d = JSON.parse(line);
       if (d.type === 'user' || d.role === 'user') {
@@ -81,7 +99,7 @@ function readNewMessages(transcriptPath, offset) {
     } catch {}
   }
 
-  return { messages, newOffset: lines.length };
+  return { messages: messages.slice(-MAX_MESSAGES), newOffset: end > 0 ? start + end : start };
 }
 
 function extractText(msg) {
@@ -326,9 +344,10 @@ async function main() {
   const transcriptPath = findTranscript();
   if (!transcriptPath) exitJson();
 
-  // Reset offset and counters if transcript changed (new session)
+  // Reset offset and counters if transcript changed (new session).
+  // State without byteOffset counted lines (<= 1.9.15): start from the tail.
   const newSession = transcriptPath !== state.transcriptPath;
-  const offset = newSession ? 0 : state.offset;
+  const offset = newSession || state.byteOffset == null ? null : state.byteOffset;
 
   // Read new messages
   const { messages, newOffset } = readNewMessages(transcriptPath, offset);
@@ -351,7 +370,7 @@ async function main() {
 
   // Save state (counters updated after analysis below)
   const persistState = () => saveState({
-    offset: newOffset,
+    byteOffset: newOffset,
     lastRun: now,
     transcriptPath,
     findingsCount,

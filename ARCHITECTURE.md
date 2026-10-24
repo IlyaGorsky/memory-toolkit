@@ -58,7 +58,7 @@ Directory is our convention (human navigation + grep scope). `type:` in frontmat
 | `workstreams/<name>/workstream.md` (planned) | `project` | `identity` | ✅ |
 | `notes/YYYY-MM-DD.md` | (event log, no frontmatter) | — | ❌ (not a memory file by CC's model) |
 
-**Why the separation:** CC's `parseMemoryType` in `memoryTypes.ts` validates against a closed enum of 4 types. Custom values like `type: decision` return `undefined` — CC silently ignores the file in recall. By mapping our semantic dirs to valid types, the recall selector ranks and surfaces our files alongside CC's own. Our `category:` field carries the extra semantic nuance without breaking CC.
+**Why the separation:** CC's `parseMemoryType` in `memoryTypes.ts` validates against a closed enum of 4 types. Custom values like `type: decision` return `undefined` — the file stays in recall but loses its `[type]` tag in the selector's manifest, so the selector has less to rank it by. By mapping our semantic dirs to valid types, the recall selector ranks and surfaces our files alongside CC's own. Our `category:` field carries the extra semantic nuance without breaking CC.
 
 ## Why each layer exists
 
@@ -183,8 +183,11 @@ Enables scripting, CI health checks, debugging, and admin — without going thro
 Open items being worked on:
 
 - **Workstream identity gap** — handoff is a savepoint, not identity. A second file per workstream (what is this workstream, why, scope) is needed alongside handoff for long-running initiatives. Without identity, handoff alone goes stale and workstreams lose meaning as reference.
-- **Memory dir resolution alignment with CC** — `scripts/lib/find-memory-dir.js` currently uses filesystem ancestor walk + glob fallback, diverging from CC's `findCanonicalGitRoot` + `CLAUDE_COWORK_MEMORY_PATH_OVERRIDE` / `autoMemoryDirectory` protocol. Can cause split-brain between CC auto-memory and memory-toolkit writes in monorepo subfolders.
-- **Watcher subprocess HOME isolation** — `claude -p` spawn should pass an isolated `HOME` so its own session-log artefacts don't pollute the parent project's `sessions.jsonl`.
+
+Resolved:
+
+- **Memory dir resolution alignment with CC** (1.9.16) — `scripts/lib/find-memory-dir.js` follows CC's chain: `CLAUDE_COWORK_MEMORY_PATH_OVERRIDE` → `autoMemoryDirectory` (local, user) → canonical git root (worktrees share the main repo's memory) → CC's `sanitizePath`. It no longer walks above the git root into a parent folder's memory.
+- **Watcher subprocess isolation** (1.9.14) — the nested `claude -p` runs with `--no-session-persistence` and `MEMORY_TOOLKIT_NESTED`, so it writes no transcript and the plugin's own hooks are no-ops inside it.
 
 ## See also
 

@@ -7,6 +7,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const {
   withSandbox, runHook, assertValidHookStdout, estimateTokens,
@@ -227,9 +228,21 @@ describe('session-save.js', () => {
       });
     });
 
-    // session-save.js does not guard fs.writeFileSync — EACCES will crash it.
-    // Surfaced by AP-42; graceful-exit guarantee deferred to a follow-up AP.
-    it.skip('workstreams/ read-only → graceful exit 0 [bug, follow-up]', () => {});
+    // AP-43: surfaced by AP-42, writes are now guarded one by one.
+    it('workstreams/ read-only → graceful exit 0, note still written', () => {
+      withSandbox(({ home, memoryDir, projectDir }) => {
+        const wsDir = path.join(memoryDir, 'workstreams');
+        fs.mkdirSync(wsDir, { recursive: true });
+        fs.chmodSync(wsDir, 0o500);
+        try {
+          const r = runHook('session-save.js', payload(), { env: { HOME: home }, cwd: projectDir });
+          assert.equal(r.exitCode, 0, r.stderr);
+          assert.ok(!fs.existsSync(path.join(wsDir, 'precompact.md')));
+          const today = new Date().toISOString().slice(0, 10);
+          assert.ok(fs.readFileSync(path.join(memoryDir, 'notes', `${today}.md`), 'utf8').includes('PRE_COMPACT'));
+        } finally { fs.chmodSync(wsDir, 0o755); }
+      });
+    });
   });
 
   describe('axis-3: malformed input', () => {
@@ -584,9 +597,7 @@ describe('axis-4: uncaught exception paths', () => {
     });
   });
 
-  // Known: session-save.js throws on EACCES (no try/catch around writeFileSync).
-  // This test asserts controlled termination, not graceful exit.
-  it('session-save: workstreams/ read-only (known crash, controlled)', () => {
+  it('session-save: workstreams/ read-only → exit 0 (AP-43)', () => {
     withSandbox(({ home, memoryDir, projectDir }) => {
       const wsDir = path.join(memoryDir, 'workstreams');
       fs.mkdirSync(wsDir, { recursive: true });
@@ -594,6 +605,7 @@ describe('axis-4: uncaught exception paths', () => {
       try {
         const r = runHook('session-save.js', payload(), { env: { HOME: home }, cwd: projectDir });
         assertControlled(r);
+        assert.equal(r.exitCode, 0, r.stderr);
       } finally { fs.chmodSync(wsDir, 0o755); }
     });
   });
@@ -781,6 +793,17 @@ describe('commit-note.js', () => {
       assert.equal(r.exitCode, 0, r.stderr);
       assert.ok(notesOf(memoryDir).includes('COMMIT:'));
       assert.ok(notesOf(memoryDir).includes('init'));
+    });
+  });
+
+  it('rejected commit (HEAD is an old commit) → no note', () => {
+    withSandbox(({ home, memoryDir, projectDir }) => {
+      execSync('git -c user.name=t -c user.email=t@t commit -q --allow-empty -m old-head', {
+        cwd: projectDir, env: { ...process.env, GIT_COMMITTER_DATE: '2020-01-01T00:00:00' },
+      });
+      runHook('commit-note.js', JSON.stringify({ cwd: projectDir, tool_input: { command: 'git commit -m rejected' } }),
+        { env: { HOME: home }, cwd: projectDir });
+      assert.ok(!notesOf(memoryDir).includes('COMMIT:'));
     });
   });
 

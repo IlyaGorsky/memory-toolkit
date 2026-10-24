@@ -1,37 +1,35 @@
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execSync } = require('child_process');
+const { sanitizePath } = require('../scripts/lib/find-memory-dir');
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'session-save.js');
-const TMP = path.join(__dirname, '.tmp-session-save');
 
+// Throwaway HOME + project outside the repo (see .claude/rules/testing.md).
 function setup() {
-  const cwd = TMP;
-  const projectKey = cwd.replace(/[/.]/g, '-').replace(/^-/, '');
-  const memoryDir = path.join(
-    process.env.HOME, '.claude', 'projects', `-${projectKey}`, 'memory'
-  );
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'mt-session-save-')));
+  const home = path.join(root, 'home');
+  const cwd = path.join(root, 'project');
+  const memoryDir = path.join(home, '.claude', 'projects', sanitizePath(cwd), 'memory');
   fs.mkdirSync(memoryDir, { recursive: true });
   fs.mkdirSync(cwd, { recursive: true });
   // Init git so session-save can read branch/commit
   execSync('git init && git commit --allow-empty -m "init"', { cwd, encoding: 'utf8' });
-  return { cwd, memoryDir };
+  return { root, home, cwd, memoryDir };
 }
 
-function cleanup({ cwd, memoryDir }) {
-  fs.rmSync(cwd, { recursive: true, force: true });
-  const notesDir = path.join(memoryDir, 'notes');
-  const handoffDir = path.join(memoryDir, 'workstreams');
-  fs.rmSync(notesDir, { recursive: true, force: true });
-  fs.rmSync(handoffDir, { recursive: true, force: true });
+function cleanup({ root }) {
+  fs.rmSync(root, { recursive: true, force: true });
 }
 
-function run(stdinJson, cwd) {
+function run(stdinJson, ctx) {
   return execSync(`echo '${JSON.stringify(stdinJson)}' | node "${SCRIPT}"`, {
     encoding: 'utf8',
-    cwd,
+    cwd: ctx.cwd,
+    env: { ...process.env, HOME: ctx.home },
     timeout: 5000,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
@@ -51,7 +49,7 @@ describe('session-save.js', () => {
   it('creates pre-compact snapshot with session id', () => {
     const input = { session_id: 'save-001' };
 
-    run(input, ctx.cwd);
+    run(input, ctx);
 
     const handoffPath = path.join(ctx.memoryDir, 'workstreams', 'precompact.md');
     assert.ok(fs.existsSync(handoffPath), 'precompact.md should exist');
@@ -63,7 +61,7 @@ describe('session-save.js', () => {
   it('includes git info in snapshot', () => {
     const input = { session_id: 'save-002' };
 
-    run(input, ctx.cwd);
+    run(input, ctx);
 
     const handoffPath = path.join(ctx.memoryDir, 'workstreams', 'precompact.md');
     const content = fs.readFileSync(handoffPath, 'utf8');
@@ -75,7 +73,7 @@ describe('session-save.js', () => {
   it('logs pre-compact to daily notes with uuid', () => {
     const input = { session_id: 'save-003' };
 
-    run(input, ctx.cwd);
+    run(input, ctx);
 
     const today = new Date().toISOString().slice(0, 10);
     const notePath = path.join(ctx.memoryDir, 'notes', `${today}.md`);
@@ -90,14 +88,14 @@ describe('session-save.js', () => {
     fs.mkdirSync(path.dirname(handoffPath), { recursive: true });
     fs.writeFileSync(handoffPath, 'real handoff');
 
-    run({ session_id: 'save-004' }, ctx.cwd);
+    run({ session_id: 'save-004' }, ctx);
 
     assert.strictEqual(fs.readFileSync(handoffPath, 'utf8'), 'real handoff');
   });
 
   it('handles unknown session id', () => {
 
-    run({}, ctx.cwd);
+    run({}, ctx);
 
     const handoffPath = path.join(ctx.memoryDir, 'workstreams', 'precompact.md');
     const content = fs.readFileSync(handoffPath, 'utf8');

@@ -12,7 +12,7 @@ argument-hint: "<command> [args] [--brief] — search <query> | workstream <name
 ## Step 0: Resolve memory directory
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" dir   # walks cwd ancestors; prints the path, exits 1 if no memory yet
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" dir   # same folder as CC auto-memory (git root); prints the path, exits 1 if no memory yet
 ```
 
 `memory.js` resolves the memory dir from cwd itself — no `--dir` needed. Each bash block runs in a fresh shell, so do not rely on variables set in another block.

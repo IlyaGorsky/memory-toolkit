@@ -26,7 +26,7 @@ Parses `.jsonl` files of Claude Code sessions, extracts chronology and key decis
 Show all sessions with dates and sizes:
 
 ```bash
-SESSIONS_DIR=~/.claude/projects/-$(pwd | tr '/.' '-' | sed 's/^-//')
+SESSIONS_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/$(pwd | sed 's/[^a-zA-Z0-9]/-/g')"
 ls -lat "$SESSIONS_DIR"/*.jsonl 2>/dev/null | head -20
 ```
 

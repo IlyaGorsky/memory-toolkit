@@ -11,6 +11,7 @@ const { spawnSync, execSync } = require('child_process');
 const assert = require('node:assert/strict');
 
 const PLUGIN_ROOT = path.resolve(__dirname, '../..');
+const { sanitizePath } = require(path.join(PLUGIN_ROOT, 'scripts', 'lib', 'find-memory-dir'));
 
 function createSandbox({ withPriorSession = false } = {}) {
   const sandboxRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'mt-safety-')));
@@ -24,8 +25,7 @@ function createSandbox({ withPriorSession = false } = {}) {
     cwd: projectDir, encoding: 'utf8', stdio: 'pipe',
   });
 
-  const projectKey = projectDir.replace(/[/.]/g, '-').replace(/^-/, '');
-  const memoryDir = path.join(home, '.claude', 'projects', `-${projectKey}`, 'memory');
+  const memoryDir = path.join(home, '.claude', 'projects', sanitizePath(projectDir), 'memory');
   fs.mkdirSync(memoryDir, { recursive: true });
   fs.writeFileSync(path.join(memoryDir, 'MEMORY.md'), '# Memory\n');
 

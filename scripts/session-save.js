@@ -39,9 +39,8 @@ try {
 
 const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-// Write snapshot
-fs.mkdirSync(handoffDir, { recursive: true });
-
+// Each write is guarded on its own: a read-only workstreams/ (EACCES) must not
+// crash the hook or stop the note below — PreCompact has to exit 0 (AP-43).
 const snapshot = `---
 name: Pre-compact snapshot
 description: Auto-saved at ${now}
@@ -58,22 +57,30 @@ type: project
 _Auto-saved by PreCompact hook. Context lives in handoff.md (written by /session-end)._
 `;
 
-const snapshotTmp = snapshotPath + '.tmp';
-fs.writeFileSync(snapshotTmp, snapshot, 'utf8');
-fs.renameSync(snapshotTmp, snapshotPath); // atomic on POSIX
+try {
+  fs.mkdirSync(handoffDir, { recursive: true });
+  const snapshotTmp = snapshotPath + '.tmp';
+  fs.writeFileSync(snapshotTmp, snapshot, 'utf8');
+  fs.renameSync(snapshotTmp, snapshotPath); // atomic on POSIX
+  log.info('pre-compact snapshot saved', { path: snapshotPath, sessionId, branch, uncommitted });
+} catch (err) {
+  log.info('pre-compact snapshot not saved', { path: snapshotPath, error: err.code || err.message });
+}
 
 // Also log to daily notes
 const notesDir = path.join(memoryDir, 'notes');
-fs.mkdirSync(notesDir, { recursive: true });
 const today = new Date().toISOString().slice(0, 10);
 const notePath = path.join(notesDir, `${today}.md`);
 const time = new Date().toTimeString().slice(0, 5);
 const entry = `- ${time} PRE_COMPACT uuid:${sessionId} branch:${branch} commit:${lastCommit} uncommitted:${uncommitted}\n`;
 
-if (fs.existsSync(notePath)) {
-  fs.appendFileSync(notePath, entry);
-} else {
-  fs.writeFileSync(notePath, `---\nname: Notes ${today}\ndescription: Session notes ${today}\ntype: project\n---\n\n# ${today}\n\n${entry}`);
+try {
+  fs.mkdirSync(notesDir, { recursive: true });
+  if (fs.existsSync(notePath)) {
+    fs.appendFileSync(notePath, entry);
+  } else {
+    fs.writeFileSync(notePath, `---\nname: Notes ${today}\ndescription: Session notes ${today}\ntype: project\n---\n\n# ${today}\n\n${entry}`);
+  }
+} catch (err) {
+  log.info('pre-compact note not saved', { path: notePath, error: err.code || err.message });
 }
-
-log.info('pre-compact snapshot saved', { path: snapshotPath, sessionId, branch, uncommitted });

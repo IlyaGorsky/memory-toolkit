@@ -70,23 +70,24 @@ function incrementHits(filePath) {
         const fmBlock = fmMatch[1];
         const today = new Date().toISOString().slice(0, 10);
 
-        // Parse current hits
-        const hitsMatch = fmBlock.match(/^hits:\s*(\d+)/m);
-        const currentHits = hitsMatch ? parseInt(hitsMatch[1], 10) : 0;
+        // CC's Write/Edit stamper moves top-level keys under `metadata:`, so
+        // hits may be indented, or present twice (nested + one we appended later).
+        // Take the highest and keep every copy in sync.
+        const hitsValues = [...fmBlock.matchAll(/^\s*hits:\s*(\d+)/gm)].map(m => parseInt(m[1], 10));
+        const currentHits = hitsValues.length ? Math.max(...hitsValues) : 0;
         const newHits = currentHits + 1;
 
         let newFm;
-        if (hitsMatch) {
-            // Update existing hits line
-            newFm = fmBlock.replace(/^hits:\s*\d+/m, `hits: ${newHits}`);
+        if (hitsValues.length) {
+            newFm = fmBlock.replace(/^(\s*)hits:\s*\d+/gm, (_, indent) => `${indent}hits: ${newHits}`);
         } else {
             // Add hits line at end of frontmatter
             newFm = fmBlock + `\nhits: ${newHits}`;
         }
 
         // Update or add last_hit
-        if (/^last_hit:/m.test(newFm)) {
-            newFm = newFm.replace(/^last_hit:.*/m, `last_hit: ${today}`);
+        if (/^\s*last_hit:/m.test(newFm)) {
+            newFm = newFm.replace(/^(\s*)last_hit:.*/gm, (_, indent) => `${indent}last_hit: ${today}`);
         } else {
             newFm = newFm + `\nlast_hit: ${today}`;
         }

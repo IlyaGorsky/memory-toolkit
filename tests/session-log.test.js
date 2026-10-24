@@ -1,40 +1,34 @@
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execSync } = require('child_process');
+const { sanitizePath } = require('../scripts/lib/find-memory-dir');
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'session-log.js');
-const TMP = path.join(__dirname, '.tmp-session-log');
 
-// session-log.js resolves memory dir from cwd via project key
-// We'll create a fake memory dir and run with matching cwd
+// session-log.js resolves memory dir from cwd via project key.
+// Throwaway HOME + non-git cwd outside the repo (see .claude/rules/testing.md).
 function setup() {
-  const cwd = TMP;
-  const projectKey = cwd.replace(/[/.]/g, '-').replace(/^-/, '');
-  const memoryDir = path.join(
-    process.env.HOME, '.claude', 'projects', `-${projectKey}`, 'memory'
-  );
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'mt-session-log-')));
+  const home = path.join(root, 'home');
+  const cwd = path.join(root, 'project');
+  const memoryDir = path.join(home, '.claude', 'projects', sanitizePath(cwd), 'memory');
   fs.mkdirSync(memoryDir, { recursive: true });
   fs.mkdirSync(cwd, { recursive: true });
-  return { cwd, memoryDir };
+  return { root, home, cwd, memoryDir };
 }
 
-function cleanup({ cwd, memoryDir }) {
-  fs.rmSync(cwd, { recursive: true, force: true });
-  // Clean up notes and sessions.jsonl but keep parent dirs
-  const notesDir = path.join(memoryDir, 'notes');
-  const sessionsFile = path.join(memoryDir, 'sessions.jsonl');
-  const handoffDir = path.join(memoryDir, 'workstreams');
-  fs.rmSync(notesDir, { recursive: true, force: true });
-  fs.rmSync(handoffDir, { recursive: true, force: true });
-  if (fs.existsSync(sessionsFile)) fs.unlinkSync(sessionsFile);
+function cleanup({ root }) {
+  fs.rmSync(root, { recursive: true, force: true });
 }
 
-function run(stdinJson, cwd) {
+function run(stdinJson, ctx) {
   return execSync(`echo '${JSON.stringify(stdinJson)}' | node "${SCRIPT}"`, {
     encoding: 'utf8',
-    cwd,
+    cwd: ctx.cwd,
+    env: { ...process.env, HOME: ctx.home },
     timeout: 5000,
   });
 }
@@ -53,7 +47,7 @@ describe('session-log.js', () => {
   it('logs session start to daily notes', () => {
     const input = { session_id: 'sess-001', transcript_path: '/tmp/sess-001.jsonl' };
 
-    run(input, ctx.cwd);
+    run(input, ctx);
 
     const today = new Date().toISOString().slice(0, 10);
     const notePath = path.join(ctx.memoryDir, 'notes', `${today}.md`);
@@ -67,7 +61,7 @@ describe('session-log.js', () => {
   it('appends to sessions.jsonl', () => {
     const input = { session_id: 'sess-002', transcript_path: '/tmp/sess-002.jsonl' };
 
-    run(input, ctx.cwd);
+    run(input, ctx);
 
     const sessionsPath = path.join(ctx.memoryDir, 'sessions.jsonl');
     assert.ok(fs.existsSync(sessionsPath), 'sessions.jsonl should exist');
@@ -78,9 +72,9 @@ describe('session-log.js', () => {
   });
 
   it('accumulates multiple sessions', () => {
-    run({ session_id: 'sess-a' }, ctx.cwd);
+    run({ session_id: 'sess-a' }, ctx);
 
-    run({ session_id: 'sess-b' }, ctx.cwd);
+    run({ session_id: 'sess-b' }, ctx);
 
     const sessionsPath = path.join(ctx.memoryDir, 'sessions.jsonl');
     const lines = fs.readFileSync(sessionsPath, 'utf8').trim().split('\n');
@@ -94,13 +88,13 @@ describe('session-log.js', () => {
     fs.mkdirSync(handoffDir, { recursive: true });
     fs.writeFileSync(path.join(handoffDir, 'handoff.md'), 'Last session: did stuff');
 
-    const output = run({ session_id: 'sess-003' }, ctx.cwd);
+    const output = run({ session_id: 'sess-003' }, ctx);
 
     assert.ok(output.includes('Last session: did stuff'));
   });
 
   it('outputs DOC reminder', () => {
-    const output = run({ session_id: 'sess-004' }, ctx.cwd);
+    const output = run({ session_id: 'sess-004' }, ctx);
 
     assert.ok(output.includes('DOC:'));
     assert.ok(output.includes('/memory note'));
@@ -112,6 +106,7 @@ describe('session-log.js', () => {
     const result = execSync(`echo '{}' | node "${SCRIPT}"`, {
       encoding: 'utf8',
       cwd: ctx.cwd,
+      env: { ...process.env, HOME: ctx.home },
       timeout: 5000,
     });
 

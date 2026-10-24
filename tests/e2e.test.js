@@ -54,8 +54,8 @@ describe('e2e: isolated sandbox', () => {
     });
 
     // 3. Memory dir (as CC would create it)
-    const projectKey = projectDir.replace(/[/.]/g, '-').replace(/^-/, '');
-    memoryDir = path.join(fakeHome, '.claude', 'projects', `-${projectKey}`, 'memory');
+    const { sanitizePath } = require('../scripts/lib/find-memory-dir');
+    memoryDir = path.join(fakeHome, '.claude', 'projects', sanitizePath(projectDir), 'memory');
     fs.mkdirSync(memoryDir, { recursive: true });
   });
 
@@ -206,7 +206,7 @@ describe('e2e: isolated sandbox', () => {
       const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
       assert.ok(state.lastRun > 0, 'lastRun should be updated');
       assert.equal(state.transcriptPath, transcriptPath, 'should track current transcript');
-      assert.ok(state.offset >= 8, 'offset should advance past messages');
+      assert.equal(state.byteOffset, fs.statSync(transcriptPath).size, 'offset should advance past messages');
     });
 
     it('respects throttle — skips if ran recently', () => {
@@ -353,7 +353,7 @@ describe('e2e: isolated sandbox', () => {
       assert.equal(state.suggestedReflect, false, 'suggestedReflect should reset');
       assert.equal(state.suggestedDocs, false, 'suggestedDocs should reset');
       assert.equal(state.phase, null, 'phase should reset on new session');
-      assert.equal(state.offset, 8, 'offset should start from 0 for new transcript');
+      assert.equal(state.byteOffset, fs.statSync(newTranscript).size, 'offset should start from 0 for new transcript');
     });
 
     it('reads transcript_path from stdin when provided', () => {
@@ -395,7 +395,7 @@ describe('e2e: isolated sandbox', () => {
 
       const state = JSON.parse(fs.readFileSync(wStatePath, 'utf8'));
       assert.equal(state.transcriptPath, stdinTranscript, 'should use transcript_path from stdin');
-      assert.ok(state.offset >= 8, 'should have read messages from stdin transcript');
+      assert.equal(state.byteOffset, fs.statSync(stdinTranscript).size, 'should have read messages from stdin transcript');
     });
   });
 
@@ -473,32 +473,31 @@ describe('e2e: isolated sandbox', () => {
       assert.ok(!projectKey.includes('.'), `project key should not contain dots: ${projectKey}`);
     });
 
-    // Note: ancestor walk test requires real HOME (PROJECTS_ROOT is set at require time).
-    // Covered by existing e2e test "finds transcript from sessions.jsonl" which runs
-    // watcher in sandbox with HOME=fakeHome via execSync.
+    // Resolution rules (git root, worktrees, overrides) are in find-memory-dir.test.js.
   });
 
   // --- Path sanitization ---
 
   describe('PROJ_KEY sanitization matches CC', () => {
-    it('SKILL.md tr command matches find-memory-dir sanitize()', () => {
-      const { memoryDirFor } = require('../scripts/lib/find-memory-dir');
-      // Test with paths containing dots (e.g., username "i.gorskiy")
+    it("SKILL.md sed command matches find-memory-dir sanitizePath()", () => {
+      const { sanitizePath } = require('../scripts/lib/find-memory-dir');
       const testPaths = [
         '/Users/i.gorskiy/Desktop/projects/my-app',
-        '/home/user.name/code/project',
-        '/tmp/test.dir/sub.dir/project',
+        '/home/user.name/code/my_project',
+        '/Users/me/Documents/Obsidian Vault',
       ];
       for (const testPath of testPaths) {
-        const jsKey = memoryDirFor(testPath);
-        // Simulate what SKILL.md bash does: tr '/.' '-' | sed 's/^-//'
-        const bashKey = testPath.replace(/[/.]/g, '-').replace(/^-/, '');
-        const bashDir = path.join(
-          process.env.HOME, '.claude', 'projects', `-${bashKey}`, 'memory'
-        );
-        assert.equal(jsKey, bashDir,
-          `sanitization mismatch for ${testPath}: JS=${jsKey} vs bash=${bashDir}`
-        );
+        // What the skills run: pwd | sed 's/[^a-zA-Z0-9]/-/g'
+        const bashKey = execSync(`printf '%s' "${testPath}" | sed 's/[^a-zA-Z0-9]/-/g'`, { encoding: 'utf8' });
+        assert.equal(sanitizePath(testPath), bashKey, `sanitization mismatch for ${testPath}`);
+      }
+    });
+
+    it('no skill computes the key with the legacy tr formula', () => {
+      for (const skill of fs.readdirSync(path.join(PLUGIN_ROOT, 'skills'))) {
+        const file = path.join(PLUGIN_ROOT, 'skills', skill, 'SKILL.md');
+        if (!fs.existsSync(file)) continue;
+        assert.ok(!fs.readFileSync(file, 'utf8').includes("tr '/.'"), `${skill} uses tr '/.'`);
       }
     });
   });
@@ -525,37 +524,6 @@ describe('e2e: isolated sandbox', () => {
         content.includes('docs_target') || content.includes('Where should'),
         'docs-reflect should detect or ask for rules location'
       );
-    });
-  });
-
-  // --- find-memory-dir resilience ---
-
-  describe('find-memory-dir glob fallback', () => {
-    it('finds memory dir when sanitization drifts', () => {
-      // Simulate: CC used a different sanitization formula, so the ancestor walk
-      // won't find it. But the dir exists and contains MEMORY.md with the
-      // project leaf name in the dir name.
-      const altKey = 'WEIRD-SANITIZATION-' + path.basename(projectDir);
-      const altDir = path.join(fakeHome, '.claude', 'projects', altKey, 'memory');
-      fs.mkdirSync(altDir, { recursive: true });
-      fs.writeFileSync(path.join(altDir, 'MEMORY.md'), '# Test');
-
-      // Use a cwd that won't match ancestor walk (since altKey uses wrong formula)
-      // but whose basename matches the altKey
-      const { findMemoryDir } = require('../scripts/lib/find-memory-dir');
-      // Temporarily point to fakeHome by patching PROJECTS_ROOT
-      // Instead, we test the exported globFallback indirectly:
-      // The ancestor walk will find the real dir first (since projectDir exists),
-      // so we test with a subdirectory that has no matching ancestor dir
-      const subDir = path.join(sandbox, 'orphan', path.basename(projectDir));
-      fs.mkdirSync(subDir, { recursive: true });
-
-      // For the orphan dir, ancestor walk will fail (no memory dir exists for
-      // /tmp/mt-e2e-.../orphan/project via formula). Glob fallback should find
-      // the altKey dir because it contains the leaf name "project".
-      const result = findMemoryDir(subDir);
-      // Should find either the formula-based dir or the alt dir via glob
-      assert.ok(result.exists, 'glob fallback should find an existing memory dir');
     });
   });
 
@@ -1061,38 +1029,15 @@ describe('e2e: isolated sandbox', () => {
     });
   });
 
-  // --- commandsMetadata: allowedTools ---
+  // --- plugin.json ---
 
-  describe('all skills have allowedTools in commandsMetadata', () => {
-    it('every skill directory has a matching commandsMetadata entry', () => {
+  describe('plugin.json has no keys Claude Code ignores', () => {
+    it('no commandsMetadata (internal CC field, never read from the manifest)', () => {
       const pluginJson = JSON.parse(
         fs.readFileSync(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'), 'utf8')
       );
-      const metadata = pluginJson.commandsMetadata || {};
-      const skillsDir = path.join(PLUGIN_ROOT, 'skills');
-      const skillNames = fs.readdirSync(skillsDir, { withFileTypes: true })
-        .filter(d => d.isDirectory() && fs.existsSync(path.join(skillsDir, d.name, 'SKILL.md')))
-        .filter(d => {
-          // Skip internal skills (user-invocable: false)
-          const content = fs.readFileSync(path.join(skillsDir, d.name, 'SKILL.md'), 'utf8');
-          return !content.includes('user-invocable: false');
-        })
-        .map(d => d.name);
-
-      for (const name of skillNames) {
-        assert.ok(
-          metadata[name],
-          `skill "${name}" missing from commandsMetadata`
-        );
-        assert.ok(
-          Array.isArray(metadata[name].allowedTools) && metadata[name].allowedTools.length > 0,
-          `skill "${name}" has no allowedTools`
-        );
-        assert.ok(
-          metadata[name].allowedTools.includes('Bash'),
-          `skill "${name}" should have Bash in allowedTools`
-        );
-      }
+      assert.ok(!('commandsMetadata' in pluginJson),
+        'skill permissions belong in SKILL.md frontmatter (allowed-tools)');
     });
   });
 });

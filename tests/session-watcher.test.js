@@ -184,14 +184,49 @@ describe('readNewMessages', () => {
     assert.equal(messages[0].role, 'user');
     assert.equal(messages[0].text, 'hello');
     assert.equal(messages[1].role, 'assistant');
-    assert.equal(newOffset, 3);
+    assert.equal(newOffset, fs.statSync(transcriptPath).size);
   });
 
-  it('reads only new messages from offset', () => {
-    const { messages, newOffset } = readNewMessages(transcriptPath, 2);
+  it('reads only new messages from a byte offset', () => {
+    const content = fs.readFileSync(transcriptPath, 'utf8');
+    const afterTwo = Buffer.byteLength(content.split('\n').slice(0, 2).join('\n') + '\n');
+    const { messages, newOffset } = readNewMessages(transcriptPath, afterTwo);
     assert.equal(messages.length, 1);
     assert.equal(messages[0].text, 'do X');
-    assert.equal(newOffset, 3);
+    assert.equal(newOffset, fs.statSync(transcriptPath).size);
+  });
+
+  it('leaves a line still being written for the next run', () => {
+    const done = JSON.stringify({ type: 'user', message: { content: 'complete' } }) + '\n';
+    fs.writeFileSync(transcriptPath, done + '{"type":"user","message":{"content":"half');
+    const { messages, newOffset } = readNewMessages(transcriptPath, 0);
+    assert.deepEqual(messages.map(m => m.text), ['complete']);
+    assert.equal(newOffset, Buffer.byteLength(done));
+  });
+
+  it('starts over when the offset is past the end (file rewritten)', () => {
+    fs.writeFileSync(transcriptPath, JSON.stringify({ type: 'user', message: { content: 'fresh' } }) + '\n');
+    const { messages } = readNewMessages(transcriptPath, 10_000_000);
+    assert.deepEqual(messages.map(m => m.text), ['fresh']);
+  });
+
+  it('null offset reads only the tail and skips the cut line', () => {
+    const filler = JSON.stringify({ type: 'system', text: 'x'.repeat(1024 * 1024) }) + '\n';
+    const last = JSON.stringify({ type: 'user', message: { content: 'newest' } }) + '\n';
+    fs.writeFileSync(transcriptPath, filler.repeat(6) + last);
+    const { messages, newOffset } = readNewMessages(transcriptPath, null);
+    assert.deepEqual(messages.map(m => m.text), ['newest']);
+    assert.equal(newOffset, fs.statSync(transcriptPath).size);
+  });
+
+  it('keeps only the newest 40 messages', () => {
+    const lines = Array.from({ length: 50 }, (_, i) =>
+      JSON.stringify({ type: 'user', message: { content: `m${i}` } }));
+    fs.writeFileSync(transcriptPath, lines.join('\n') + '\n');
+    const { messages } = readNewMessages(transcriptPath, 0);
+    assert.equal(messages.length, 40);
+    assert.equal(messages[0].text, 'm10');
+    assert.equal(messages[39].text, 'm49');
   });
 
   it('skips command messages', () => {

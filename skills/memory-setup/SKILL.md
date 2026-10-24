@@ -14,9 +14,7 @@ Detects existing memory, adds what's missing, doesn't overwrite anything.
 ## Step 1: Find memory directory
 
 ```bash
-GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-PROJ_KEY=$(echo "$GIT_ROOT" | tr '/.' '-' | sed 's/^-//')
-MEM_DIR="$HOME/.claude/projects/-${PROJ_KEY}/memory"
+MEM_DIR=$(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" dir)   # the folder CC auto-memory uses; printed even if missing
 ```
 
 Check what already exists:

@@ -20,7 +20,7 @@ Quick context entry. Gather state, propose focus.
 If a workstream argument is provided — skip to Step 3.
 
 ```bash
-MEM_DIR=$(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" dir)   # walks cwd ancestors — works from a monorepo subdir
+MEM_DIR=$(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" dir)   # keyed by git root, like CC — works from a monorepo subdir
 
 # Latest handoff (global; per-workstream fetched in Step 3)
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" handoff

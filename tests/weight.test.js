@@ -106,6 +106,27 @@ describe('weight.js', () => {
             const content = fs.readFileSync(filePath, 'utf-8');
             assert.ok(!content.includes('hits:'));
         });
+
+        // CC 2.1.310 Write/Edit moves top-level keys under `metadata:`
+        it('increments hits that CC moved under metadata', () => {
+            const filePath = path.join(TMP, 'feedback', 'test.md');
+            writeFile('feedback/test.md',
+                '---\nname: test\ndescription: d\nmetadata:\n  type: feedback\n  hits: 17\n  last_hit: 2026-01-01\n---\n\nBody');
+            incrementHits(filePath);
+            const content = fs.readFileSync(filePath, 'utf-8');
+            assert.ok(content.includes('  hits: 18'), content);
+            assert.ok(!/^hits:/m.test(content), 'no second top-level hits');
+            assert.ok(!content.includes('2026-01-01'));
+        });
+
+        it('heals a duplicate left by the old counter: keeps the max in every copy', () => {
+            const filePath = path.join(TMP, 'feedback', 'test.md');
+            writeFile('feedback/test.md',
+                '---\nname: test\nmetadata:\n  type: feedback\n  hits: 17\nhits: 2\n---\n\nBody');
+            incrementHits(filePath);
+            const content = fs.readFileSync(filePath, 'utf-8');
+            assert.equal((content.match(/hits: 18/g) || []).length, 2, content);
+        });
     });
 
     describe('parseSections', () => {
