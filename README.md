@@ -1,3 +1,5 @@
+![memory-toolkit](assets/logo.svg)
+
 # memory-toolkit
 
 [![Release](https://img.shields.io/github/v/release/IlyaGorsky/memory-toolkit?color=blue)](https://github.com/IlyaGorsky/memory-toolkit/releases)
