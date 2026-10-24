@@ -9,11 +9,19 @@ metadata:
 
 # /session-end — Handoff for the next session
 
-Save context before finishing. Three phases: handoff → reflect → docs-reflect.
+Save context before finishing. Receipt first, then three phases: handoff → reflect → docs-reflect.
 
 Memory commands: `node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" <command>` — the memory dir is resolved from cwd; `… dir` prints it.
 
 Write the handoff **after the last commit** of the session (or re-check "What's next" against `git log` before saving) — a handoff written before the final commit misses it.
+
+## Phase 0: Receipt
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" receipt
+```
+
+What the session already left — memory files it wrote, decisions and DOC the watcher logged, commits, the workstreams it moved and whether their cards kept up. Show it first: much of the session is already saved, and the phases below only add what is missing. For a workstream whose card is `not updated` or `missing`, offer the card change before the handoff (`card <ws> --material`, `write-card` after the user's yes). If the user wants a quick finish, the receipt plus the card offers are enough.
 
 ## Phase 1: Handoff
 

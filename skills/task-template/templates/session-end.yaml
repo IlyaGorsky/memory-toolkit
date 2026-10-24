@@ -12,6 +12,7 @@ phases:
   - id: memory-scan
     description: Check MEMORY.md for profile/rules/reference drift
     steps:
+      - description: "Run node \"${CLAUDE_PLUGIN_ROOT}/scripts/memory.js\" receipt and show it: what the session already left, and which workstream cards lag"
       - read: MEMORY.md
       - description: "Note any stale entries — profile changes, new rules, new reference links"
       - description: "Do not edit MEMORY.md yet — findings feed the handoff content"

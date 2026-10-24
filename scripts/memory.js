@@ -21,6 +21,7 @@
  *   node memory.js classify --items=<json>                           — keyword-route items by workstreams.json (multi-label, JSON in/out)
  *   node memory.js session-activity                                  — current session items since last SESSION_START (JSON)
  *   node memory.js session-changes                                   — git commits + files since session start (JSON)
+ *   node memory.js receipt [--json]                                  — what this session left: memory files, logged items, workstreams moved
  *   node memory.js handoff [<workstream>]                            — print per-ws handoff if exists, else global, else NO_HANDOFF
  *   node memory.js write-handoff --workstream=<name>|--global --content=<f> — write workstreams/<name>/handoff.md (stamps modified + branch)
  *   node memory.js card <workstream> [--material]                    — workstream card, else NO_CARD (--material: + decisions to draft or update it from)
@@ -1055,7 +1056,7 @@ function park(...args) {
 
     const now = new Date().toISOString();
     const withFrontmatter = body.startsWith('---\n') ? body : `---\nname: ${title}\ndescription: ${title}\ntype: project\n---\n\n${body}`;
-    const final = setFrontmatter(withFrontmatter, { category: 'parked', ...(kind && { kind }), parked: now.slice(0, 10), modified: now });
+    const final = setFrontmatter(withFrontmatter, { category: 'parked', ...(kind && { kind }), parked: now.slice(0, 10), modified: now, ...sessionStamp() });
     fs.writeFileSync(path.join(MEMORY_DIR, rel), final.endsWith('\n') ? final : final + '\n');
     console.log(`Parked: ${rel}`);
 }
@@ -1256,6 +1257,66 @@ function printSessionChanges() {
     console.log(JSON.stringify(sessionChanges(), null, 2));
 }
 
+// --- Session receipt ---
+
+// What the session left: memory files it wrote (originSessionId — CC's stamper and
+// memory.js both set it), what the watcher and the model logged, the workstreams it
+// moved and whether their cards kept up. Deterministic, writes nothing: the end of a
+// session is a receipt, not a ritual (decisions/value-in-the-moment).
+const RECEIPT_KINDS = {
+    decision: /^WATCH:DECISION/, correction: /^WATCH:CORRECTION/, plan: /^WATCH:PLAN/,
+    doc: /^DOC:/, reflect: /^REFLECT:/, parked: /^PARKED:/, commit: /^COMMIT:/,
+};
+
+function sessionReceipt() {
+    const sessionId = process.env.CLAUDE_CODE_SESSION_ID || '';
+    const activity = sessionActivity();
+    const files = sessionId
+        ? getAllFiles().filter(f => !f.name.startsWith('notes') && f.frontmatter.originSessionId === sessionId).map(f => f.name).sort()
+        : null;
+    const logged = Object.fromEntries(Object.entries(RECEIPT_KINDS)
+        .map(([kind, re]) => [kind, activity.items.filter(t => re.test(t)).length]));
+    const touched = {};
+    for (const item of activity.items) {
+        if (!Object.values(RECEIPT_KINDS).some(re => re.test(item))) continue;
+        for (const ws of matchWorkstreams(item)) touched[ws] = (touched[ws] || 0) + 1;
+    }
+    const workstreams = Object.entries(touched)
+        .sort((a, b) => b[1] - a[1])
+        .map(([workstream, items]) => {
+            const card = readCard(workstream);
+            const cardState = !card ? 'missing'
+                : sessionId && parseFrontmatter(card.content).originSessionId === sessionId ? 'updated' : 'not updated';
+            return { workstream, items, card: cardState };
+        });
+    return {
+        session: sessionId || null,
+        since: activity.session_start ? `${activity.session_start_date} ${activity.session_start}` : null,
+        files,
+        logged,
+        workstreams,
+    };
+}
+
+function printReceipt(...args) {
+    const r = sessionReceipt();
+    if (args.includes('--json')) return console.log(JSON.stringify(r, null, 2));
+
+    console.log(`\n# Session receipt${r.since ? ` — since ${r.since}` : ''}\n`);
+    if (r.files === null) {
+        console.log('Memory files: unknown (no CLAUDE_CODE_SESSION_ID)');
+    } else {
+        console.log(`Memory files written (${r.files.length})${r.files.length ? ':' : ''}`);
+        for (const f of r.files) console.log(`  ${f}`);
+    }
+    const l = r.logged;
+    console.log(`\nLogged: ${l.decision} decisions, ${l.correction} corrections, ${l.plan} plans, ${l.doc} DOC, ${l.reflect} reflections, ${l.parked} parked, ${l.commit} commits`);
+    if (r.workstreams.length) {
+        console.log('\nWorkstreams moved:');
+        for (const w of r.workstreams) console.log(`  ${w.workstream} — ${w.items} items, card ${w.card}`);
+    }
+}
+
 function printHandoff(...args) {
     const ws = (args[0] || '').trim();
     if (ws) {
@@ -1302,6 +1363,13 @@ function currentBranch() {
     }
 }
 
+// The key CC's stamper puts on memory files a session writes; ours carry it too,
+// so the session receipt sees everything the session left.
+function sessionStamp() {
+    const id = process.env.CLAUDE_CODE_SESSION_ID;
+    return id ? { originSessionId: id } : {};
+}
+
 // Sets frontmatter keys in place — top-level, or the copy CC's stamper moved under metadata:.
 function setFrontmatter(content, fields) {
     return content.replace(/^---\n([\s\S]*?)\n---/, (_, fm) => {
@@ -1337,7 +1405,7 @@ function writeWorkstreamFile(command, args, { global = false, relFor, frontmatte
     const out = path.join(MEMORY_DIR, rel);
     fs.mkdirSync(path.dirname(out), { recursive: true });
 
-    const final = setFrontmatter(body.startsWith('---\n') ? body : `${frontmatterFor(ws)}\n${body}`, stamp);
+    const final = setFrontmatter(body.startsWith('---\n') ? body : `${frontmatterFor(ws)}\n${body}`, { ...stamp, ...sessionStamp() });
     fs.writeFileSync(out, final.endsWith('\n') ? final : final + '\n');
     console.log(`Wrote ${rel}`);
 }
@@ -1359,6 +1427,7 @@ const commands = {
     classify,
     'session-activity': printSessionActivity,
     'session-changes': printSessionChanges,
+    receipt: printReceipt,
     'write-handoff': writeHandoff,
     handoff: printHandoff,
     card: printCard,
@@ -1396,6 +1465,7 @@ if (require.main === module) {
         console.log('  classify --items=<f>   — classify items by workstream keywords (JSON in/out)');
         console.log('  session-activity       — current session items since last SESSION_START (JSON)');
         console.log('  session-changes        — git files+commits since session start (JSON)');
+        console.log('  receipt [--json]       — what this session left: memory files, logged items, workstreams moved');
         console.log('  write-handoff --workstream=<name>|--global --content=<f>  — write a handoff (stamps modified + branch)');
         console.log('  handoff [<workstream>]  — print per-workstream handoff if exists, else global');
         console.log('  card <ws> [--material]  — workstream card (--material: decisions to draft or update it from)');
@@ -1441,6 +1511,7 @@ module.exports = {
     workstreamSignals,
     sessionActivity,
     sessionChanges,
+    sessionReceipt,
     writeHandoff,
     queryRecurring,
     health,

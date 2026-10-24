@@ -541,6 +541,45 @@ describe('memory.js', () => {
     });
   });
 
+  describe('receipt', () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const receipt = () => JSON.parse(execSync(`node "${SCRIPT}" --dir="${TMP}" receipt --json`, {
+      encoding: 'utf8', env: testEnv({ CLAUDE_CODE_SESSION_ID: 's1' }),
+    }));
+
+    it('lists what the session left and which cards kept up', () => {
+      fs.writeFileSync(path.join(TMP, 'workstreams.json'), JSON.stringify({ viewer: ['viewer'], search: ['search'] }));
+      writeFile(`notes/${today}.md`, [
+        '- 09:00 SESSION_START uuid:s1 branch:main',
+        '- 09:10 WATCH:DECISION: viewer stays read-only',
+        '- 09:20 WATCH:CORRECTION: search filters go left',
+        '- 09:30 DOC: testing — use a fake HOME',
+        '- 09:40 COMMIT: abc123 viewer: fix',
+        '- 09:50 just a note',
+      ].join('\n'));
+      writeFile('feedback/fake-home.md', '---\nname: fake home\nmetadata:\n  originSessionId: s1\n---\nbody');
+      writeFile('feedback/older.md', '---\nname: older\noriginSessionId: s0\n---\nbody');
+      writeFile('workstreams/viewer.md', '---\nname: viewer\noriginSessionId: s1\n---\ncard');
+      writeFile('workstreams/search.md', '---\nname: search\noriginSessionId: s0\n---\ncard');
+
+      const r = receipt();
+
+      assert.deepEqual(r.files, ['feedback/fake-home.md', 'workstreams/viewer.md']);
+      assert.deepEqual([r.logged.decision, r.logged.correction, r.logged.doc, r.logged.commit], [1, 1, 1, 1]);
+      assert.deepEqual(r.workstreams.map(w => [w.workstream, w.card]).sort(), [['search', 'not updated'], ['viewer', 'updated']]);
+    });
+
+    it('memory.js writes carry the session id, so the receipt sees them', () => {
+      const content = path.join(TMP, 'card.md');
+      fs.writeFileSync(content, 'card body');
+      execSync(`node "${SCRIPT}" --dir="${TMP}" write-card --workstream=viewer --content=${content}`, {
+        env: testEnv({ CLAUDE_CODE_SESSION_ID: 's1' }),
+      });
+
+      assert.ok(receipt().files.includes('workstreams/viewer.md'));
+    });
+  });
+
   describe('parking', () => {
     const day = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     function writeContent(content) {

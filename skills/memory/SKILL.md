@@ -159,6 +159,12 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" write-card --workstream=<name> --
 ```
 Writes `workstreams/<name>.md` (not the Write tool: CC's stamper would reshuffle the frontmatter); adds `type: project`, `category: workstream` if missing and stamps `modified`.
 
+### receipt [--json]
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" receipt
+```
+What this session left: memory files it wrote (by `originSessionId`), decisions / corrections / DOC / commits logged since its start, the workstreams it moved and whether their cards were updated. Writes nothing.
+
 ### park / parked / unpark
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" park --title="<title>" --content=<path> [--workstream=<name>] [--kind=idea|task|question]
