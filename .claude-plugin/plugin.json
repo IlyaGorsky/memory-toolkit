@@ -1,7 +1,7 @@
 {
   "name": "memory-toolkit",
   "description": "From session to memory to repo docs: carries your work across Claude Code sessions and turns what you learn into docs and rules — for you, your agent, and your team. Handoffs, workstreams, curated markdown.",
-  "version": "1.9.19",
+  "version": "1.9.20",
   "author": {
     "name": "Ilya Gorsky"
   },
