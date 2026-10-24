@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5A44F2"/><stop offset="1" stop-color="#3B27C8"/></linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <g transform="translate(122 150) scale(0.33)">
+    <path d="M774.73 441.60 A272 272 0 1 1 582.40 249.27" fill="none" stroke="#FFFFFF" stroke-width="116"/>
+    <circle cx="704.33" cy="319.67" r="80" fill="#C6F36A"/>
+  </g>
+  <text x="482" y="282" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="84" font-weight="700" fill="#FFFFFF">memory-toolkit</text>
+  <text x="484" y="356" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif" font-size="38" fill="#E4E0FF"><tspan x="484">CLAUDE.md is for your codebase.</tspan><tspan x="484" dy="52">Not for your sessions.</tspan></text>
+</svg>
