@@ -13,7 +13,7 @@
  *   node memory.js decisions [topic]                                 — decisions (Why/How to apply blocks)
  *   node memory.js list [type]                                       — list files (workstreams|feedback|decisions|profile|reference|notes|all)
  *   node memory.js note <text>                                       — daily note (SESSION_* markers auto-routed to sessions.log)
- *   node memory.js docs                                              — collect DOC: notes from daily notes
+ *   node memory.js docs [--all|--mark-reviewed]                      — DOC: notes since the last review (--all: every one)
  *   node memory.js findings                                          — collect WATCH: entries (auto-captured decisions/plans/corrections)
  *   node memory.js recurring                                         — recurring feedback patterns
  *   node memory.js reindex                                           — rebuild MEMORY.md index sorted by weight
@@ -314,35 +314,52 @@ function note(...words) {
 
 // --- Docs ---
 
-function queryDocs() {
-    const notesDir = DIRS.notes;
-    if (!notesDir || !fs.existsSync(notesDir)) return [];
+// /docs-reflect ends with a DOCS_REVIEWED note; `docs` lists only DOC: notes after
+// the last one, so each run sees what is new. `docs --all` ignores the marker.
+const DOCS_REVIEWED = 'DOCS_REVIEWED';
+// "testing — insight": the domain is one word. A sentence that just contains
+// a dash (watcher findings) stays whole under "general".
+const DOC_DOMAIN = /^[\p{L}\p{N}_-]{1,30}$/u;
 
-    const results = [];
+function queryDocs({ all = false } = {}) {
+    const notesDir = DIRS.notes;
+    if (!notesDir || !fs.existsSync(notesDir)) return { docs: [], reviewedAt: null };
+
+    let results = [];
+    let reviewedAt = null;
     for (const entry of fs.readdirSync(notesDir).sort()) {
         if (!entry.endsWith('.md')) continue;
         const filePath = path.join(notesDir, entry);
         const content = fs.readFileSync(filePath, 'utf-8');
         const lines = content.split('\n');
+        const date = entry.replace('.md', '');
         for (const line of lines) {
+            const reviewed = line.match(/^- (\d{2}:\d{2}) DOCS_REVIEWED\b/);
+            if (reviewed) {
+                reviewedAt = `${date} ${reviewed[1]}`;
+                if (!all) results = [];
+                continue;
+            }
             const match = line.match(/^- (\d{2}:\d{2}) DOC:\s*(.+)$/);
             if (match) {
                 const [, time, text] = match;
-                const date = entry.replace('.md', '');
-                // Parse "domain — insight" or just "insight"
                 const dashIdx = text.indexOf(' — ');
-                const domain = dashIdx >= 0 ? text.slice(0, dashIdx).trim() : 'general';
-                const insight = dashIdx >= 0 ? text.slice(dashIdx + 3).trim() : text.trim();
+                const head = dashIdx >= 0 ? text.slice(0, dashIdx).trim() : '';
+                const domain = DOC_DOMAIN.test(head) ? head : 'general';
+                const insight = domain === head ? text.slice(dashIdx + 3).trim() : text.trim();
                 results.push({ date, time, domain, insight, raw: text });
             }
         }
     }
-    return results;
+    return { docs: results, reviewedAt };
 }
 
-function printDocs() {
-    const docs = queryDocs();
-    if (!docs.length) return console.log('No DOC: notes found. Use: memory.js note "DOC: domain — insight"');
+function printDocs(...args) {
+    if (args.includes('--mark-reviewed')) return note(DOCS_REVIEWED);
+    const all = args.includes('--all');
+    const { docs, reviewedAt } = queryDocs({ all });
+    const since = reviewedAt && !all ? ` since the last review (${reviewedAt})` : '';
+    if (!docs.length) return console.log(`No DOC: notes${since}. Use: memory.js note "DOC: domain — insight"`);
 
     // Group by domain
     const grouped = {};
@@ -351,7 +368,7 @@ function printDocs() {
         grouped[d.domain].push(d);
     }
 
-    console.log(`\n# DOC notes (${docs.length})\n`);
+    console.log(`\n# DOC notes${since} (${docs.length})\n`);
     for (const [domain, items] of Object.entries(grouped).sort()) {
         console.log(`## ${domain} (${items.length})`);
         for (const item of items) {
@@ -806,7 +823,7 @@ function sessionActivity() {
 
     const lines = fs.readFileSync(notePath, 'utf-8').split('\n');
     const START = /^- (\d{2}:\d{2}) SESSION_START/;
-    const MARKER = /^- \d{2}:\d{2} (SESSION_START|SESSION_END|NEW_WORKSTREAM)/;
+    const MARKER = /^- \d{2}:\d{2} (SESSION_START|SESSION_END|NEW_WORKSTREAM|DOCS_REVIEWED)/;
     const LINE = /^- (\d{2}:\d{2}) (.+)$/;
 
     let boundaryIdx = -1;
@@ -949,7 +966,7 @@ if (require.main === module) {
         console.log('  decisions [topic]      — decisions by topic');
         console.log('  list [type]            — list files');
         console.log('  note <text>            — quick note');
-        console.log('  docs                   — collect DOC: notes');
+        console.log('  docs [--all]           — DOC: notes since the last review (--mark-reviewed closes one)');
         console.log('  findings               — collect WATCH:DECISION/PLAN/CORRECTION/PHASE entries from daily notes');
         console.log('  classify --items=<f>   — classify items by workstream keywords (JSON in/out)');
         console.log('  session-activity       — current session items since last SESSION_START (JSON)');

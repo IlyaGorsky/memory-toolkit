@@ -182,6 +182,18 @@ describe('memory.js', () => {
       assert.deepEqual(out.items, ['current note one', 'current note two']);
     });
 
+    it('skips the DOCS_REVIEWED marker', () => {
+      writeNote([
+        '- 10:00 SESSION_START uuid:x branch:main',
+        '- 10:05 DOCS_REVIEWED',
+        '- 10:10 current note',
+      ].join('\n'));
+
+      const out = JSON.parse(run('session-activity'));
+
+      assert.deepEqual(out.items, ['current note']);
+    });
+
     it('separates DOC: items into docs field', () => {
       writeNote([
         '- 10:00 SESSION_START uuid:x branch:main',
@@ -607,6 +619,46 @@ describe('memory.js', () => {
 
       assert.ok(result.includes('general'));
       assert.ok(result.includes('some general insight'));
+    });
+
+    it('keeps a sentence with a dash whole under general', () => {
+      writeFile('notes/2026-04-09.md', '---\nname: Notes\ntype: project\n---\n\n- 10:00 DOC: Ad-hoc hook runs write to real memory — use a fake HOME\n');
+
+      const result = run('docs');
+
+      assert.ok(result.includes('general (1)'));
+      assert.ok(result.includes('Ad-hoc hook runs write to real memory — use a fake HOME'));
+    });
+
+    it('lists only DOC: notes after the last DOCS_REVIEWED', () => {
+      writeFile('notes/2026-04-08.md', '---\nname: Notes\ntype: project\n---\n\n- 10:00 DOC: testing — reviewed rule\n- 18:00 DOCS_REVIEWED\n- 18:05 DOC: testing — same-day new rule\n');
+      writeFile('notes/2026-04-09.md', '---\nname: Notes\ntype: project\n---\n\n- 10:00 DOC: api — next-day new rule\n');
+
+      const result = run('docs');
+
+      assert.ok(!result.includes('reviewed rule'));
+      assert.ok(result.includes('same-day new rule'));
+      assert.ok(result.includes('next-day new rule'));
+      assert.ok(result.includes('since the last review (2026-04-08 18:00)'));
+    });
+
+    it('--all ignores the review marker', () => {
+      writeFile('notes/2026-04-08.md', '---\nname: Notes\ntype: project\n---\n\n- 10:00 DOC: testing — reviewed rule\n- 18:00 DOCS_REVIEWED\n');
+
+      const result = run('docs --all');
+
+      assert.ok(result.includes('reviewed rule'));
+      assert.ok(!result.includes('since the last review'));
+    });
+
+    it('--mark-reviewed closes the current list', () => {
+      const today = new Date().toISOString().slice(0, 10);
+      writeFile(`notes/${today}.md`, '---\nname: Notes\ntype: project\n---\n\n- 00:00 DOC: testing — rule one\n');
+
+      run('docs --mark-reviewed');
+      const result = run('docs');
+
+      assert.ok(result.includes('No DOC: notes since the last review'));
     });
   });
 

@@ -167,7 +167,7 @@ Git commits + files union since session start. JSON output. Pipe with `session-a
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" docs
 ```
-Collect `DOC:` notes from daily notes for `/docs-reflect`.
+`DOC:` notes since the last review (`DOCS_REVIEWED` marker) for `/docs-reflect`. `--all` lists every one; `--mark-reviewed` closes a review.
 
 ### recurring
 ```bash

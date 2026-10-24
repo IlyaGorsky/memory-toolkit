@@ -7,19 +7,21 @@ argument-hint: "[optional focus area]"
 
 # /docs-reflect — Session knowledge → repo documentation
 
-Collect DOC: notes accumulated during the session, generalize them into rules, and propose documentation for the repository.
+Collect DOC: notes accumulated since the last review, generalize them into rules, and propose documentation for the repository.
 
 ---
 
 ## Step 1: Collect findings
 
-Two sources: DOC: notes from the current session, and recurring feedback from memory.
+Two sources: DOC: notes since the last review, and recurring feedback from memory.
 
 ### 1a: DOC: notes
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" docs
 ```
+
+Lists DOC: notes after the last `DOCS_REVIEWED` marker (Step 6 writes it). `docs --all` lists every note, reviewed or not.
 
 ### 1b: Recurring feedback patterns
 
@@ -151,6 +153,18 @@ For rule files (`.claude/rules/`, `docs/`, or custom target):
 
 - <Rule>
 ```
+
+---
+
+## Step 6: Close the review
+
+**MANDATORY** once the user has answered Step 4 — applied, picked or skipped. Skipped notes count as reviewed:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" docs --mark-reviewed
+```
+
+Don't mark if the run was limited to a focus area or the user stopped before answering — those notes stay for the next run.
 
 ---
 
