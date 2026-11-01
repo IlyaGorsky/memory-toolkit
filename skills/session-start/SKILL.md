@@ -142,13 +142,13 @@ Read the card first: it frames the handoff. Show: open/done task counts, blocker
 
 **Focus candidates**
 
-1. **{task}** — {why now} → **{Model}** ({reason})
-2. **{task}** — {why now} → **{Model}** ({reason})
-3. **{task}** — {why now} → **{Model}** ({reason})
+1. **{task}** — {why now} → `/model {model}` ({reason})
+2. **{task}** — {why now} → `/model {model}` ({reason})
+3. **{task}** — {why now} → `/model {model}` ({reason})
 
 ---
 
-My hypothesis: focus on **{candidate #1}** because {reasoning grounded in handoff/git/recency}. Recommendation: **{Model}**.
+My hypothesis: focus on **{candidate #1}** because {reasoning grounded in handoff/git/recency}. Recommendation: `/model {model}`.
 
 Agree, pick another candidate, or **start a new workstream**?
 ```
@@ -157,7 +157,7 @@ Agree, pick another candidate, or **start a new workstream**?
 
 **MANDATORY:** the closing line must keep "start a new workstream" as an explicit option. Never omit it — the hypothesis frame hides existing workstreams, so the escape hatch to create a new one has to be surfaced every time. If the user picks it, run Step 1b (workstream creation).
 
-**Model selection:** Opus = planning/architecture/exploration. Sonnet = execution by plan, refactoring, review. Haiku = routine/translation/pattern copy.
+**Model selection:** Opus = planning/architecture/exploration. Sonnet = execution by plan, refactoring, review. Haiku = routine/translation/pattern copy. Write it as the command to type — `/model opus`, `/model sonnet`, `/model haiku` — one action instead of a menu.
 
 ---
 
