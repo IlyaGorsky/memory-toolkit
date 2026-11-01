@@ -1113,7 +1113,8 @@ function queryParked() {
             title: (fm.name || path.basename(rel, '.md')).replace(/^"(.*)"$/, '$1'),
             description: (fm.description || '').replace(/^"(.*)"$/, '$1'),
             kind: fm.kind || '',
-            parked: fm.parked || new Date(fs.statSync(file).mtimeMs).toISOString().slice(0, 10),
+            // mtime last: reading a file through memory.js bumps it
+            parked: fm.parked || (fm.modified || '').slice(0, 10) || new Date(fs.statSync(file).mtimeMs).toISOString().slice(0, 10),
         });
     };
     const wsDir = path.join(MEMORY_DIR, 'workstreams');

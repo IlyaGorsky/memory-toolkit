@@ -25,11 +25,11 @@ function cleanup({ root }) {
   fs.rmSync(root, { recursive: true, force: true });
 }
 
-function run(stdinJson, ctx) {
+function run(stdinJson, ctx, env = {}) {
   return execSync(`echo '${JSON.stringify(stdinJson)}' | node "${SCRIPT}"`, {
     encoding: 'utf8',
     cwd: ctx.cwd,
-    env: testEnv({ HOME: ctx.home }),
+    env: testEnv({ HOME: ctx.home, ...env }),
     timeout: 5000,
   });
 }
@@ -182,6 +182,16 @@ describe('session-log.js', () => {
       assert.ok(out.systemMessage.includes('💡 10 decisions over 10 days fit no workstream — /memory unassigned'));
       assert.ok(!out.hookSpecificOutput.additionalContext.includes('fit no workstream'));
       assert.ok(notesToday().includes('OFFERED: new-workstream'));
+    });
+
+    it('in a host that hides systemMessage (VS Code), asks the model to relay the lines', () => {
+      decisions('search filters', 10);
+
+      const out = JSON.parse(run({ session_id: 's' }, ctx, { CLAUDE_CODE_ENTRYPOINT: 'claude-vscode' }));
+
+      assert.ok(!out.systemMessage.includes('💡'));
+      assert.ok(out.hookSpecificOutput.additionalContext.includes('show these lines verbatim'));
+      assert.ok(out.hookSpecificOutput.additionalContext.includes('💡 10 decisions over 10 days fit no workstream'));
     });
 
     it('does not repeat an invitation for two weeks', () => {

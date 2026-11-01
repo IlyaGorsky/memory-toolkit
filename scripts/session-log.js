@@ -192,7 +192,15 @@ if (signals) {
 
   const shown = invites.filter(([key]) => !signals.offeredRecently.includes(key)).slice(0, 2);
   if (shown.length) {
-    output.systemMessage += shown.map(([, text]) => `\n💡 ${text}`).join('');
+    const lines = shown.map(([, text]) => `💡 ${text}`).join('\n');
+    // The terminal shows systemMessage; the VS Code panel (and other hosts) don't, so
+    // there the model relays the lines in its first reply.
+    const entrypoint = process.env.CLAUDE_CODE_ENTRYPOINT;
+    if (!entrypoint || entrypoint === 'cli') {
+      output.systemMessage += `\n${lines}`;
+    } else {
+      context += `---\nmemory-toolkit has a note for the user that this host doesn't display. At the very start of your first reply, show these lines verbatim, then answer as usual:\n${lines}\n`;
+    }
     try {
       execFileSync(process.execPath, [memJs, `--dir=${memoryDir}`, 'note', `OFFERED: ${shown.map(([key]) => key).join(' ')}`], { stdio: 'ignore', timeout: 5000 });
     } catch {}
