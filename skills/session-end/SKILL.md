@@ -5,6 +5,8 @@ user-invocable: true
 argument-hint: ""
 metadata:
   pipeline: true
+allowed-tools:
+  - Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" *)
 ---
 
 # /session-end — Handoff for the next session

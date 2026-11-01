@@ -3,6 +3,8 @@ name: reflect
 description: Session reflection — analyzes what happened, proposes backlog items, captures insights.
 user-invocable: true
 argument-hint: ""
+allowed-tools:
+  - Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" *)
 ---
 
 # Reflect — session reflection

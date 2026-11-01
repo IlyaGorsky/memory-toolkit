@@ -3,6 +3,8 @@ name: docs-reflect
 description: Collect DOC: notes from session, generalize, and propose repo documentation (.claude/rules/, docs/).
 user-invocable: true
 argument-hint: "[optional focus area]"
+allowed-tools:
+  - Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" *)
 ---
 
 # /docs-reflect — Session knowledge → repo documentation

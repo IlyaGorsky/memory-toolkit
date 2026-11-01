@@ -3,6 +3,8 @@ name: memory
 description: Project memory — search, workstreams, notes, decisions. Auto-initializes on first use.
 user-invocable: true
 argument-hint: "<command> [args] [--brief] — search <query> | workstream <name> | workstreams | add-workstream <name> <kw...> | recent [n] | decisions [topic] | list | note <text> | handoff [<ws>] | card <ws> [--material] | unassigned"
+allowed-tools:
+  - Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" *)
 ---
 
 # /memory — Project Memory

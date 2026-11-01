@@ -3,6 +3,8 @@ name: park
 description: Park an idea, task or question for later — set it aside with its context, don't lose the thought.
 user-invocable: true
 argument-hint: "[what to park]"
+allowed-tools:
+  - Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" *)
 ---
 
 # /park — Set something aside

@@ -5,6 +5,12 @@ user-invocable: true
 argument-hint: "[workstream]"
 metadata:
   pipeline: true
+allowed-tools:
+  - Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" *)
+  - Bash(git status *)
+  - Bash(git log *)
+  - Bash(git branch *)
+  - Bash(git diff *)
 ---
 
 # /session-start — Cold session start
@@ -19,22 +25,18 @@ Quick context entry. Gather state, propose focus.
 
 If a workstream argument is provided — skip to Step 3.
 
+Run each command as its own Bash call — that is what the skill's `allowed-tools` pre-approves (no variables, loops or pipes):
+
 ```bash
-MEM_DIR=$(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" dir)   # keyed by git root, like CC — works from a monorepo subdir
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" handoff        # latest handoff (per-workstream ones in Step 3)
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" workstreams    # sorted by aggregate weight
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" dir            # memory folder, keyed by git root like CC
+```
 
-# Latest handoff (global; per-workstream fetched in Step 3)
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" handoff
+Then read the newest `notes/YYYY-MM-DD.md` in that folder (first ~30 lines), and for each of the top 3 workstreams:
 
-# Latest dated note
-ls -t "$MEM_DIR/notes/"*.md 2>/dev/null | head -1 | xargs -I{} head -30 {}
-
-# Workstreams sorted by aggregate weight
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" workstreams
-
-# Top-3 brief inline
-for WS in <top-3 from sorted list>; do
-  node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" workstream "$WS" --brief | head -15
-done
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" workstream <name> --brief
 ```
 
 **Decision tree — source of focus candidates:**
