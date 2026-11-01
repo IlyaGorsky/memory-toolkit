@@ -67,37 +67,26 @@ The plugin provides skills (`/session-start`, `/memory`, `/reflect`, etc.) and h
 
 ### Setup for an existing project
 
-1. **Run `/memory`** in your project — the skill auto-detects the memory directory and bootstraps `memory.js` if missing.
-
-   Or copy manually:
-   ```bash
-   # Find your project's memory dir — the folder Claude Code's auto-memory uses
-   MEM_DIR=$(node /path/to/memory-toolkit/scripts/memory.js dir)
-
-   # Copy memory.js
-   cp /path/to/memory-toolkit/scripts/memory.js "$MEM_DIR/"
-   ```
+1. **Run `/memory-setup`** in your project — the skill finds the memory directory Claude Code uses and adds the structure. `memory.js` stays in the plugin; nothing is copied into the memory folder.
 
 2. **Add the API block** to the top of your MEMORY.md (after the heading):
    ```markdown
    ## API
    ```bash
-   node ~/.claude/projects/-Your-Project-Key/memory/memory.js <command>
+   node /path/to/memory-toolkit/scripts/memory.js --dir=~/.claude/projects/-Your-Project-Key/memory <command>
    ```
    ```
    This tells Claude how to call the memory API in future sessions.
 
 3. **(Optional) Create workstreams.json** if you want workstream support:
    ```bash
-   cd "$MEM_DIR"
-   node memory.js add-workstream my-feature keyword1 keyword2
+   node /path/to/memory-toolkit/scripts/memory.js add-workstream my-feature keyword1 keyword2
    ```
 
 4. **(Optional) Organize files into subdirectories** for better filtering:
    ```
    memory/
    ├── MEMORY.md
-   ├── memory.js
    ├── workstreams.json
    ├── feedback/
    ├── decisions/

@@ -23,7 +23,6 @@ Check what already exists:
 echo "=== Memory dir: $MEM_DIR ==="
 [ -d "$MEM_DIR" ] && echo "DIR: exists" || echo "DIR: missing"
 [ -f "$MEM_DIR/MEMORY.md" ] && echo "MEMORY.md: exists" || echo "MEMORY.md: missing"
-[ -f "$MEM_DIR/memory.js" ] && echo "memory.js: exists" || echo "memory.js: missing"
 [ -f "$MEM_DIR/workstreams.json" ] && echo "workstreams.json: exists" || echo "workstreams.json: missing"
 ls "$MEM_DIR"/*.md 2>/dev/null | wc -l | xargs -I{} echo "MD files: {}"
 ls -d "$MEM_DIR"/*/ 2>/dev/null | wc -l | xargs -I{} echo "Subdirs: {}"
@@ -54,7 +53,7 @@ Proceed? (yes/skip)
 **Wait for confirmation before creating any files.**
 
 1. `mkdir -p "$MEM_DIR"`
-2. If no `CLAUDE_PLUGIN_ROOT`: `cp /path/to/memory-toolkit/scripts/memory.js "$MEM_DIR/"`
+2. `memory.js` stays in the plugin — never copy it into `$MEM_DIR`
 3. Ask: "What are the main workstreams in this project?" → create `workstreams.json`
 4. **Profile interview** → create `profile/user-role.md` (frontmatter `type: user`).
    Ask sequentially, accept short answers, skip empty:
@@ -184,7 +183,7 @@ Do NOT remove or rewrite existing content in MEMORY.md. Only add new blocks.
 Scan existing files for patterns — group by frontmatter `type` or directory:
 
 ```bash
-node "$MEM_DIR/memory.js" --dir="$MEM_DIR" list
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" --dir="$MEM_DIR" list
 ```
 
 Ask: "Based on these files, I see topics like {X, Y, Z}. Want me to create workstreams for them?"
@@ -246,8 +245,8 @@ This file controls section protection and eviction weights for `memory.js reinde
 
 
 ```bash
-node "$MEM_DIR/memory.js" --dir="$MEM_DIR" list
-node "$MEM_DIR/memory.js" --dir="$MEM_DIR" workstreams
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" --dir="$MEM_DIR" list
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" --dir="$MEM_DIR" workstreams
 ```
 
 ---

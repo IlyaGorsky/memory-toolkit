@@ -260,17 +260,10 @@ function writeNote(memJs, text) {
   } catch {}
 }
 
+// Only the plugin's own copy: a hook never runs code from the memory folder
 function findMemoryJs() {
-  const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
-  if (pluginRoot) {
-    const p = path.join(pluginRoot, 'scripts', 'memory.js');
-    if (fs.existsSync(p)) return p;
-  }
   const sibling = path.join(__dirname, 'memory.js');
-  if (fs.existsSync(sibling)) return sibling;
-  const local = path.join(memoryDir, 'memory.js');
-  if (fs.existsSync(local)) return local;
-  return null;
+  return fs.existsSync(sibling) ? sibling : null;
 }
 
 // --- JSON output helpers ---
