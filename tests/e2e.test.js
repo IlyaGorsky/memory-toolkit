@@ -572,6 +572,24 @@ describe('e2e: isolated sandbox', () => {
     });
   });
 
+  // Claude Code re-quotes a value it can't parse and loads the skill anyway;
+  // a strict YAML parser (the Directory scan may use one) rejects it.
+  describe('skill frontmatter is strict YAML', () => {
+    it('no plain scalar holds ": " or " #"', () => {
+      const skillsDir = path.join(PLUGIN_ROOT, 'skills');
+      for (const name of fs.readdirSync(skillsDir)) {
+        const file = path.join(skillsDir, name, 'SKILL.md');
+        if (!fs.existsSync(file)) continue;
+        const fm = fs.readFileSync(file, 'utf8').split('\n---')[0];
+        for (const line of fm.split('\n')) {
+          const m = line.match(/^\s*[\w-]+:\s+(.+)$/);
+          if (!m || /^["'|>[{]/.test(m[1])) continue;
+          assert.ok(!/: | #/.test(m[1]), `${name}/SKILL.md: quote "${line.trim()}"`);
+        }
+      }
+    });
+  });
+
   // --- UX: mandatory confirmations and menus ---
 
   describe('skills have mandatory UX gates', () => {
