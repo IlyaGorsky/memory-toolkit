@@ -782,10 +782,25 @@ function health() {
 // --- Classify ---
 
 // Workstreams whose keywords occur in the text (case-insensitive, multi-label).
+// A keyword is a word, not a substring: "doc" must not take "documentation", nor
+// "repo" take "report" — substrings sent most of a project's decisions to whichever
+// workstream had a short keyword. English endings (docs, hooks, parked) still match;
+// a Cyrillic keyword matches as a word start, to cover case endings.
+const keywordPatterns = new Map();
+function keywordPattern(keyword) {
+    const k = String(keyword).toLowerCase();
+    if (!keywordPatterns.has(k)) {
+        const escaped = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const tail = /\p{Script=Cyrillic}/u.test(k) ? '' : '(?:s|es|ed|ing)?(?![\\p{L}\\p{N}])';
+        keywordPatterns.set(k, new RegExp(`(?<![\\p{L}\\p{N}])${escaped}${tail}`, 'iu'));
+    }
+    return keywordPatterns.get(k);
+}
+
 function matchWorkstreams(text) {
-    const lower = String(text).toLowerCase();
+    const s = String(text);
     return Object.entries(WORKSTREAM_ALIASES)
-        .filter(([, keywords]) => [].concat(keywords || []).some(k => k && lower.includes(String(k).toLowerCase())))
+        .filter(([, keywords]) => [].concat(keywords || []).some(k => k && keywordPattern(k).test(s)))
         .map(([ws]) => ws);
 }
 

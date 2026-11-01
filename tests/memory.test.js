@@ -100,6 +100,23 @@ describe('memory.js', () => {
       assert.deepEqual(out._unassigned, []);
     });
 
+    it('matches keywords as words, not substrings', () => {
+      writeWorkstreams({ docs: ['doc', 'repo'], lifecycle: ['hook', 'park'], ru: ['воркстрим'] });
+      const items = writeItems([
+        'documentation lives in the report',
+        'two DOCS in the repo',
+        'hooks parked for later',
+        'воркстрима нет',
+      ]);
+
+      const out = JSON.parse(run(`classify --items=${items}`));
+
+      assert.deepEqual(out.docs, ['two DOCS in the repo']);
+      assert.deepEqual(out.lifecycle, ['hooks parked for later']);
+      assert.deepEqual(out.ru, ['воркстрима нет']);
+      assert.deepEqual(out._unassigned, ['documentation lives in the report']);
+    });
+
     it('assigns item to multiple workstreams (multi-label)', () => {
       writeWorkstreams({ lifecycle: ['session-end'], docs: ['handoff'] });
       const items = writeItems(['session-end writes handoff per workstream']);
