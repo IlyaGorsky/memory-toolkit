@@ -5,9 +5,6 @@ user-invocable: true
 argument-hint: "[workstream]"
 allowed-tools:
   - Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" *)
-  - Bash(git status *)
-  - Bash(git log *)
-  - Bash(git branch *)
 ---
 
 # /session-continue — Quick Continue

@@ -486,11 +486,11 @@ No — they collaborate. CC auto-memory writes to `MEMORY.md` based on user fact
 
 ### Where is my memory stored?
 
-`~/.claude/projects/-<project-slug>/memory/`. Fully local filesystem. Nothing leaves your machine unless you enable the optional watcher with an API key.
+`~/.claude/projects/-<project-slug>/memory/`. Fully local filesystem. The only thing that leaves your machine is the background watcher's request — see below.
 
 ### Does anything get uploaded?
 
-By default — no. Memory stays on your disk. The optional `session-watcher` hook can analyze conversation chunks via Haiku through your own `claude -p` (the login Claude Code already uses) — that's the only outbound traffic, and it goes to Anthropic. memory-toolkit never reads API keys or tokens itself. Details: [PRIVACY.md](PRIVACY.md). Disable the watcher by removing it from `hooks.json` if you want zero network.
+Memory files — no, they stay on your disk. The background `session-watcher` hook (on by default) sends recent conversation text to Haiku through your own `claude -p`, under the login Claude Code already uses — that's the only outbound traffic, and it goes to the model provider your Claude Code is configured for (Anthropic by default). memory-toolkit never reads API keys or tokens itself. Details: [PRIVACY.md](PRIVACY.md). Disable the watcher by removing it from `hooks.json` if you want zero network.
 
 ### Can I use it without hooks?
 
@@ -506,7 +506,7 @@ Invisible in practice on a modern laptop.
 
 ### Does it work for teams or shared memory?
 
-No — designed for personal sessions. Memory dir is per-user, per-project. Team-level memory is on the research roadmap, not shipped.
+Memory is personal: the memory dir is per-user, per-project, and shared team memory is not shipped (it is on the research roadmap). What reaches your team is what `/docs-reflect` writes into the repo — rules in `.claude/rules/`, `docs/` or `CLAUDE.md`, after you approve them — so the whole team and their agents get what one session learned.
 
 ### How do I uninstall?
 

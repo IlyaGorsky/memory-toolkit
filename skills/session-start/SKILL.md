@@ -7,10 +7,6 @@ metadata:
   pipeline: true
 allowed-tools:
   - Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" *)
-  - Bash(git status *)
-  - Bash(git log *)
-  - Bash(git branch *)
-  - Bash(git diff *)
 ---
 
 # /session-start — Cold session start

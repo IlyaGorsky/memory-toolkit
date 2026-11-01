@@ -491,7 +491,7 @@ describe('e2e: isolated sandbox', () => {
     it("SKILL.md sed command matches find-memory-dir sanitizePath()", () => {
       const { sanitizePath } = require('../scripts/lib/find-memory-dir');
       const testPaths = [
-        '/Users/i.gorskiy/Desktop/projects/my-app',
+        '/Users/user.name/Desktop/projects/my-app',
         '/home/user.name/code/my_project',
         '/Users/me/Documents/Obsidian Vault',
       ];

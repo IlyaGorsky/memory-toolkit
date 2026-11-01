@@ -1,14 +1,16 @@
 {
   "name": "memory-toolkit",
   "metadata": {
-    "description": "Session memory lifecycle plugin for Claude Code — structured markdown memory, workstreams, handoff, and auto-save hooks. No vector DB, no daemon."
+    "description": "From session to memory to repo docs: carries your work across Claude Code sessions and turns what you learn into docs and rules — for you, your agent, and your team. Handoffs, workstreams, curated markdown."
   },
-  "owner": { "name": "Ilya Gorsky" },
+  "owner": {
+    "name": "Ilya Gorsky"
+  },
   "plugins": [
     {
       "name": "memory-toolkit",
       "source": "./",
-      "description": "Session memory lifecycle for developers — structured markdown memory, workstreams, handoff, auto-save hooks."
+      "description": "From session to memory to repo docs: carries your work across Claude Code sessions and turns what you learn into docs and rules — for you, your agent, and your team. Handoffs, workstreams, curated markdown."
     }
   ]
 }

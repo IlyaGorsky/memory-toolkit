@@ -36,7 +36,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execSync, execFileSync } = require('child_process');
 const { loadSchema, calculateWeight, incrementHits, rebuildIndex, ORIGIN } = require('./lib/weight');
 const log = require('./lib/log');
 
@@ -1254,8 +1254,8 @@ function sessionChanges() {
     const activity = sessionActivity();
     const cwd = process.cwd();
     const result = { since: activity.session_start, files: [], commits: [] };
-    const git = cmd => {
-        try { return execSync(cmd, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+    const git = (...args) => {
+        try { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trimEnd(); }
         catch { return ''; }
     };
 
@@ -1264,15 +1264,15 @@ function sessionChanges() {
         const since = activity.session_start_date === today
             ? activity.session_start
             : `${activity.session_start_date} ${activity.session_start}`;
-        const commits = git(`git log --since="${since}" --pretty=format:"%h %s"`);
+        const commits = git('log', `--since=${since}`, '--pretty=format:%h %s');
         if (commits) result.commits = commits.split('\n').filter(Boolean);
-        const commitFiles = git(`git log --since="${since}" --name-only --pretty=format:""`);
+        const commitFiles = git('log', `--since=${since}`, '--name-only', '--pretty=format:');
         const fromCommits = commitFiles.split('\n').filter(Boolean);
-        const status = git('git status --porcelain');
+        const status = git('status', '--porcelain');
         const uncommitted = status.split('\n').filter(Boolean).map(l => l.slice(3));
         result.files = [...new Set([...fromCommits, ...uncommitted])].sort();
     } else {
-        const status = git('git status --porcelain');
+        const status = git('status', '--porcelain');
         result.files = status.split('\n').filter(Boolean).map(l => l.slice(3)).sort();
     }
 
