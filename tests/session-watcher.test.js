@@ -84,8 +84,10 @@ describe('quoteArg (Windows command line)', () => {
 // plugin (the repo root is the plugin folder), so they are checked too.
 describe('no credential reads or environment forwarding', () => {
   const root = path.join(__dirname, '..');
+  // Dot folders are other test files' scratch dirs (.tmp-*), created and removed in parallel
   const walk = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e =>
-    e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.js') ? [path.join(dir, e.name)] : []);
+    e.name.startsWith('.') ? []
+      : e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.js') ? [path.join(dir, e.name)] : []);
   for (const file of [...walk(path.join(root, 'scripts')), ...walk(path.join(root, 'tests'))]) {
     it(path.relative(root, file), () => {
       const src = fs.readFileSync(file, 'utf8');
