@@ -179,12 +179,11 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" unassigned
 ```
 Decisions that match no workstream's keywords, by day — material for proposing a new workstream when a theme recurs.
 
-### signals [--mark-reviewed]
+### signals [--branch=<branch>]
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" signals                  # JSON: cards, card gaps (none or behind), new-workstream signal
-node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" signals --mark-reviewed  # after offering, whatever the answer
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" signals   # JSON: card index, card gaps, new-workstream, parked, pending DOC, recently offered
 ```
-The SessionStart hook turns these into an offer. Workstreams are optional: offer once, then mark reviewed.
+Input for the SessionStart hook. It shows the user at most two invitations (💡 lines) and logs `OFFERED: <key>` so the same one does not come back for two weeks; the model gets only the card index. Workstreams stay optional.
 
 ### classify --items=<json>
 ```bash

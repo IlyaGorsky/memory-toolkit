@@ -511,16 +511,14 @@ describe('memory.js', () => {
       assert.equal(s.unassigned.suggest, false);
     });
 
-    it('signals --mark-reviewed resets the counts until new decisions pile up', () => {
-      workstreams({ viewer: ['viewer'] });
-      decisions('viewer', 8, 1);
-      decisions('search filters', 10, 1);
+    it('signals lists invitation keys offered in the last two weeks, and pending DOC notes', () => {
+      writeFile(`notes/${day(3)}.md`, `${NOTE_HEAD}- 10:00 OFFERED: new-workstream card:viewer\n- 10:05 DOC: testing — a\n`);
+      writeFile(`notes/${day(20)}.md`, `${NOTE_HEAD}- 10:00 OFFERED: parked\n`);
 
-      run('signals --mark-reviewed');
       const s = signals();
 
-      assert.deepEqual(s.cardGaps, []);
-      assert.equal(s.unassigned.items, 0);
+      assert.deepEqual(s.offeredRecently.sort(), ['card:viewer', 'new-workstream']);
+      assert.deepEqual(s.docs, { pending: 1, suggest: false });
     });
 
     it('workstreams shows when each card was updated', () => {
@@ -634,18 +632,14 @@ describe('memory.js', () => {
       assert.throws(() => run('unpark notes/whatever.md --to=drop'));
     });
 
-    it('signals count parked items per card and offer sorting old ones at most every two weeks', () => {
+    it('signals count parked items per card and old ones', () => {
       fs.writeFileSync(path.join(TMP, 'workstreams.json'), JSON.stringify({ scaffold: ['scaffold'] }));
       writeFile('workstreams/scaffold.md', '---\nname: scaffold\ndescription: Scaffold\n---\nbody');
       writeFile('workstreams/scaffold/old.md', `---\nname: Old\ncategory: parked\nparked: ${day(40)}\n---\nbody`);
 
-      let s = JSON.parse(run('signals'));
+      const s = JSON.parse(run('signals'));
       assert.equal(s.cards[0].parked, 1);
-      assert.deepEqual(s.parked, { total: 1, stale: 1, offer: true });
-
-      run('signals --mark-reviewed');
-      s = JSON.parse(run('signals'));
-      assert.equal(s.parked.offer, false);
+      assert.deepEqual(s.parked, { total: 1, stale: 1 });
     });
   });
 

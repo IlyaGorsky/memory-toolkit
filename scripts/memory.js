@@ -30,7 +30,7 @@
  *   node memory.js parked [<workstream>]                             — parked items, oldest flagged, plus recent PARKED: notes
  *   node memory.js unpark <file> --to=<where>                        — the exit: remove a parked item, note where it went
  *   node memory.js unassigned [--days=30]                            — decisions that match no workstream, by day
- *   node memory.js signals [--branch=<b>] [--mark-reviewed]          — card gaps, new-workstream signal, branch match (JSON, for SessionStart)
+ *   node memory.js signals [--branch=<b>]                            — invitations (card gaps, new workstream, parked, DOC) for SessionStart (JSON)
  *   node memory.js dir                                               — memory directory path
  */
 
@@ -849,10 +849,11 @@ const CARD_MIN_RECENT = 3;
 const CARD_BEHIND_DECISIONS = 5;
 const NEW_WORKSTREAM_MIN_ITEMS = 10;
 const NEW_WORKSTREAM_MIN_DAYS = 3;
-// Workstreams are optional — the notes and the watcher help without any. The model
-// offers once and then writes this marker, whatever the answer; signals count only
-// decisions after it, so a declined offer comes back only once new decisions pile up.
-const WORKSTREAMS_REVIEWED = 'WORKSTREAMS_REVIEWED';
+const DOCS_PENDING_MIN = 5;
+// Invitations go to the user, and the hook that shows one logs `OFFERED: <key>`:
+// the same key is not shown again for two weeks. A week of tms sessions showed the
+// model ignores "offer at a natural pause", so this does not rely on it.
+const OFFER_PAUSE_DAYS = 14;
 
 function readCard(ws) {
     const file = path.join(MEMORY_DIR, 'workstreams', `${ws}.md`);
@@ -869,20 +870,29 @@ function queryDecisionLog() {
     if (!notesDir || !fs.existsSync(notesDir)) return [];
 
     const results = [];
-    let reviewedUpTo = 0;
     for (const entry of fs.readdirSync(notesDir).sort()) {
         if (!entry.endsWith('.md')) continue;
         const date = entry.replace('.md', '');
         for (const line of fs.readFileSync(path.join(notesDir, entry), 'utf-8').split('\n')) {
-            if (/^- \d{2}:\d{2} WORKSTREAMS_REVIEWED\b/.test(line)) {
-                reviewedUpTo = results.length;
-                continue;
-            }
             const match = line.match(/^- (\d{2}:\d{2}) (?:WATCH:(DECISION|CORRECTION)|(REFLECT)):?\s*(.+)$/);
             if (match) results.push({ date, time: match[1], kind: (match[2] || match[3]).toLowerCase(), text: match[4].trim() });
         }
     }
-    return results.map((d, i) => ({ ...d, reviewed: i < reviewedUpTo }));
+    return results;
+}
+
+// Keys of invitations shown in the last OFFER_PAUSE_DAYS (`OFFERED: key key …` notes)
+function recentOffers() {
+    const notesDir = DIRS.notes;
+    const keys = new Set();
+    if (!notesDir || !fs.existsSync(notesDir)) return keys;
+    const since = daysAgo(OFFER_PAUSE_DAYS);
+    for (const entry of fs.readdirSync(notesDir).filter(f => f.endsWith('.md') && f >= since)) {
+        for (const m of fs.readFileSync(path.join(notesDir, entry), 'utf-8').matchAll(/^- \d{2}:\d{2} OFFERED: (.+)$/gm)) {
+            for (const key of m[1].trim().split(/\s+/)) keys.add(key);
+        }
+    }
+    return keys;
 }
 
 function daysAgo(days) {
@@ -935,7 +945,8 @@ function printUnassigned(...args) {
     }
 }
 
-// What the SessionStart hook turns into instructions for the model.
+// What the SessionStart hook turns into invitations for the user and a card index
+// for the model.
 function workstreamSignals(branch = '') {
     const since = daysAgo(SIGNAL_WINDOW_DAYS);
     const cards = Object.fromEntries(Object.keys(WORKSTREAM_ALIASES).map(ws => [ws, readCard(ws)]));
@@ -943,7 +954,7 @@ function workstreamSignals(branch = '') {
     const unassigned = [];
     for (const d of queryDecisionLog()) {
         const hits = matchWorkstreams(d.text);
-        const fresh = d.date >= since && !d.reviewed;
+        const fresh = d.date >= since;
         if (!hits.length && fresh) unassigned.push(d);
         for (const ws of hits) {
             const c = counts[ws] || (counts[ws] = { total: 0, recent: 0, sinceCard: 0 });
@@ -969,7 +980,6 @@ function workstreamSignals(branch = '') {
     const parkedBy = {};
     for (const p of parked) if (p.workstream) parkedBy[p.workstream] = (parkedBy[p.workstream] || 0) + 1;
     const staleParked = parked.filter(p => p.parked < daysAgo(PARKED_STALE_DAYS)).length;
-    const lastReview = lastNoteMarker(WORKSTREAMS_REVIEWED);
     // One line per card at every session start: keep it short
     const cardIndex = Object.entries(cards)
         .filter(([, card]) => card)
@@ -982,6 +992,7 @@ function workstreamSignals(branch = '') {
             };
         });
     const days = new Set(unassigned.map(d => d.date)).size;
+    const docsPending = queryDocs().docs.length;
     // Workstreams the branch name points to, if there is anything to continue
     const branchWorkstreams = (branch ? matchWorkstreams(branch) : [])
         .map(ws => ({
@@ -997,17 +1008,14 @@ function workstreamSignals(branch = '') {
         cards: cardIndex,
         branchWorkstreams,
         cardGaps,
-        // Sorting old parked items is offered at most every two weeks
-        parked: {
-            total: parked.length,
-            stale: staleParked,
-            offer: staleParked > 0 && (!lastReview || lastReview < daysAgo(PARKED_REVIEW_PAUSE_DAYS)),
-        },
+        parked: { total: parked.length, stale: staleParked },
         unassigned: {
             items: unassigned.length,
             days,
             suggest: unassigned.length >= NEW_WORKSTREAM_MIN_ITEMS && days >= NEW_WORKSTREAM_MIN_DAYS,
         },
+        docs: { pending: docsPending, suggest: docsPending >= DOCS_PENDING_MIN },
+        offeredRecently: [...recentOffers()],
     };
 }
 
@@ -1018,7 +1026,6 @@ function workstreamSignals(branch = '') {
 // up, moved to the backlog or a catalog, or dropped (unpark). One file per item, so
 // CC's recall can surface it by its description when the topic comes back.
 const PARKED_STALE_DAYS = 30;
-const PARKED_REVIEW_PAUSE_DAYS = 14;
 const PARKED_KINDS = ['idea', 'task', 'question'];
 
 function slugify(title) {
@@ -1156,19 +1163,7 @@ function unpark(...args) {
     note(`UNPARKED: ${item.title} → ${to}`);
 }
 
-function lastNoteMarker(marker) {
-    const notesDir = DIRS.notes;
-    if (!notesDir || !fs.existsSync(notesDir)) return null;
-    for (const entry of fs.readdirSync(notesDir).filter(f => f.endsWith('.md')).sort().reverse()) {
-        if (new RegExp(`^- \\d{2}:\\d{2} ${marker}\\b`, 'm').test(fs.readFileSync(path.join(notesDir, entry), 'utf-8'))) {
-            return entry.replace('.md', '');
-        }
-    }
-    return null;
-}
-
 function printSignals(...args) {
-    if (args.includes('--mark-reviewed')) return note(WORKSTREAMS_REVIEWED);
     const branchArg = args.find(a => a && a.startsWith('--branch='));
     console.log(JSON.stringify(workstreamSignals(branchArg ? branchArg.slice('--branch='.length) : ''), null, 2));
 }
@@ -1190,7 +1185,7 @@ function sessionActivity() {
     let lines = files.flatMap(f => fs.readFileSync(path.join(notesDir, f), 'utf-8').split('\n')
         .map(line => ({ date: f.slice(0, 10), line })));
     const START = /^- (\d{2}:\d{2}) SESSION_START(?: uuid:(\S+))?/;
-    const MARKER = /^- \d{2}:\d{2} (SESSION_START|SESSION_END|NEW_WORKSTREAM|DOCS_REVIEWED|WORKSTREAMS_REVIEWED)/;
+    const MARKER = /^- \d{2}:\d{2} (SESSION_START|SESSION_END|NEW_WORKSTREAM|DOCS_REVIEWED|OFFERED)/;
     const LINE = /^- (\d{2}:\d{2}) (.+)$/;
 
     const starts = lines.map((l, i) => [i, l.line.match(START)]).filter(([, m]) => m);
@@ -1474,7 +1469,7 @@ if (require.main === module) {
         console.log('  parked [<workstream>]  — parked items, oldest flagged, plus recent PARKED: notes');
         console.log('  unpark <file> --to=<where>  — the exit: remove a parked item, note where it went');
         console.log('  unassigned [--days=30] — decisions that match no workstream, by day');
-        console.log('  signals [--branch=<b>] [--mark-reviewed]  — card gaps, new-workstream signal, branch match (JSON)');
+        console.log('  signals [--branch=<b>]  — invitations for SessionStart: card gaps, new workstream, parked, DOC (JSON)');
         console.log('  recurring              — find recurring feedback patterns');
         console.log('  reindex                — rebuild MEMORY.md index sorted by weight');
         console.log('  health                 — check memory health (dead links, stale, size, dupes)');

@@ -158,9 +158,11 @@ if (healthWarnings) {
   context += '---\nMemory health issues:\n' + healthWarnings + '\n';
 }
 
-// Workstream cards (decisions/value-in-the-moment): drawn from decisions the watcher
-// already logged, so they reach sessions that never run /session-start. The offers
-// stay silent below the thresholds.
+// Workstream cards and invitations (decisions/value-in-the-moment). A week of real
+// sessions showed the model acts on a card when its topic is in the conversation, but
+// ignores "offer at a natural pause". So the model gets the card index only, and the
+// invitations go to the user: at most two lines, each key logged as OFFERED and not
+// repeated for two weeks.
 let signals = null;
 try {
   signals = JSON.parse(execFileSync(process.execPath, [memJs, `--dir=${memoryDir}`, 'signals', `--branch=${branch}`], {
@@ -168,38 +170,32 @@ try {
   }));
 } catch {}
 if (signals) {
-  const mem = 'memory.js';
-  const offers = [];
+  if (signals.cards.length) {
+    context += `---\nWorkstream cards: ${signals.cards.map(c => `${c.workstream} — ${c.description}${c.parked ? ` (${c.parked} parked)` : ''}`).join('; ')}.\n`
+      + `When a decision, an iteration result or an open question about one of them comes up, offer to update its card `
+      + `(node "${memJs}" --dir="${memoryDir}" card <name> --material, write-card after the user agrees).\n`;
+  }
+
+  const invites = [];
+  const match = signals.branchWorkstreams[0];
+  if (match) invites.push([`branch:${match.workstream}`, `branch looks like workstream "${match.workstream}" — /session-continue ${match.workstream}`]);
   const gap = signals.cardGaps[0];
   if (gap && gap.card) {
-    offers.push(`The "${gap.workstream}" card is behind: ${gap.sinceCard} decisions since it was updated. When the conversation touches it, offer to update it from ${mem} card ${gap.workstream} --material.`);
+    invites.push([`card:${gap.workstream}`, `"${gap.workstream}" card is ${gap.sinceCard} decisions behind — ask to update it`]);
   } else if (gap) {
-    const related = gap.related.length ? ` (workstreams/ has ${gap.related.join(', ')} — maybe its card under another name)` : '';
-    offers.push(`"${gap.workstream}" has ${gap.recent} new decisions and no card${related}. When the conversation touches it, offer a card drafted from ${mem} card ${gap.workstream} --material — what it is, why, what it doesn't do, where results live, what's open.`);
+    const maybe = gap.related.length ? ` (maybe ${gap.related[0]})` : '';
+    invites.push([`card:${gap.workstream}`, `"${gap.workstream}": ${gap.recent} decisions, no card${maybe} — ask to draft one`]);
   }
-  if (signals.parked.offer) {
-    offers.push(`${signals.parked.stale} parked items have waited over 30 days (${mem} parked). At a natural pause, offer to sort them: pick up, move to the backlog or an ideas catalog, or drop — then ${mem} unpark <file> --to=<where>.`);
-  }
-  if (signals.unassigned.suggest) {
-    offers.push(`${signals.unassigned.items} decisions over ${signals.unassigned.days} days match no workstream. At a natural pause, read ${mem} unassigned; if a theme recurs, offer to start a workstream (${mem} add-workstream <name> <keywords...>, then a card as above).`);
-  }
-  if (offers.length) {
-    offers.push(`Write only once the user agrees (${mem} write-card --workstream=<name> --content=<file>). Offer each at most once, and whatever the answer run ${mem} signals --mark-reviewed. Workstreams are optional — never push.`);
-  }
-  const info = [];
-  if (signals.cards.length) {
-    info.push(`Cards: ${signals.cards.map(c => `${c.workstream} — ${c.description}${c.parked ? ` (${c.parked} parked)` : ''}`).join('; ')}. Read: ${mem} card <name>, ${mem} parked <name>. When a decision, an iteration result or an open question about one of them comes up, offer to update its card.`);
-  }
-  // An invitation to the ritual, not its content (decisions/hooks-capture-rituals-author)
-  const match = signals.branchWorkstreams[0];
-  if (match) {
-    const has = [match.card && 'card', match.handoff && 'handoff', match.parked && `${match.parked} parked`].filter(Boolean).join(' + ');
-    info.push(`Branch "${branch}" looks like workstream "${match.workstream}" (${has}). If the user picks that work up without context, suggest /session-continue ${match.workstream}.`);
-  }
-  const lines = [...info, ...offers];
-  if (lines.length) {
-    context += `---\nWorkstreams (act only when it fits the conversation; memory.js = node "${memJs}" --dir="${memoryDir}"):\n`
-      + lines.map(l => `- ${l}`).join('\n') + '\n';
+  if (signals.docs.suggest) invites.push(['docs', `${signals.docs.pending} DOC notes waiting — /docs-reflect`]);
+  if (signals.unassigned.suggest) invites.push(['new-workstream', `${signals.unassigned.items} decisions over ${signals.unassigned.days} days fit no workstream — /memory unassigned`]);
+  if (signals.parked.stale) invites.push(['parked', `${signals.parked.stale} parked items wait over 30 days — /memory parked`]);
+
+  const shown = invites.filter(([key]) => !signals.offeredRecently.includes(key)).slice(0, 2);
+  if (shown.length) {
+    output.systemMessage += shown.map(([, text]) => `\n💡 ${text}`).join('');
+    try {
+      execFileSync(process.execPath, [memJs, `--dir=${memoryDir}`, 'note', `OFFERED: ${shown.map(([key]) => key).join(' ')}`], { stdio: 'ignore', timeout: 5000 });
+    } catch {}
   }
 }
 

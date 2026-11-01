@@ -141,19 +141,20 @@ describe('session-log.js', () => {
     });
   });
 
-  it('invites /session-continue when the branch looks like a workstream', () => {
+  const hook = (input) => JSON.parse(run(input, ctx));
+
+  it('invites the user to /session-continue when the branch looks like a workstream', () => {
     execSync('git init -q -b viewer-fixes', { cwd: ctx.cwd });
     fs.writeFileSync(path.join(ctx.memoryDir, 'workstreams.json'), JSON.stringify({ viewer: ['viewer'] }));
     fs.mkdirSync(path.join(ctx.memoryDir, 'workstreams', 'viewer'), { recursive: true });
     fs.writeFileSync(path.join(ctx.memoryDir, 'workstreams', 'viewer', 'handoff.md'), '---\nname: viewer handoff\n---\nnext');
 
-    const context = JSON.parse(run({ session_id: 's' }, ctx)).hookSpecificOutput.additionalContext;
+    const out = hook({ session_id: 's' });
 
-    assert.ok(context.includes('looks like workstream "viewer"'), context);
-    assert.ok(context.includes('/session-continue viewer'));
+    assert.ok(out.systemMessage.includes('💡 branch looks like workstream "viewer" — /session-continue viewer'), out.systemMessage);
   });
 
-  describe('workstream signals', () => {
+  describe('workstream invitations', () => {
     const day = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     function decisions(topic, n) {
       const notesDir = path.join(ctx.memoryDir, 'notes');
@@ -162,45 +163,67 @@ describe('session-log.js', () => {
         fs.writeFileSync(path.join(notesDir, `${day(i + 1)}.md`), `# notes\n\n- 10:00 WATCH:DECISION: ${topic} decision ${i}\n`);
       }
     }
+    const notesToday = () => {
+      const p = path.join(ctx.memoryDir, 'notes', `${day(0)}.md`);
+      return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
+    };
 
     it('stays silent below the thresholds', () => {
       decisions('search filters', 3);
 
-      assert.ok(!run({ session_id: 's' }, ctx).includes('Workstreams (act only'));
+      assert.ok(!hook({ session_id: 's' }).systemMessage.includes('💡'));
     });
 
-    it('asks the model to offer a workstream when decisions recur over several days', () => {
+    it('invites the user, not the model, and logs the offer', () => {
       decisions('search filters', 10);
 
-      const output = run({ session_id: 's' }, ctx);
+      const out = hook({ session_id: 's' });
 
-      assert.ok(output.includes('10 decisions over 10 days match no workstream'));
-      assert.ok(output.includes('signals --mark-reviewed'));
+      assert.ok(out.systemMessage.includes('💡 10 decisions over 10 days fit no workstream — /memory unassigned'));
+      assert.ok(!out.hookSpecificOutput.additionalContext.includes('fit no workstream'));
+      assert.ok(notesToday().includes('OFFERED: new-workstream'));
     });
 
-    it('lists cards and asks to keep them current, without an offer', () => {
+    it('does not repeat an invitation for two weeks', () => {
+      decisions('search filters', 10);
+      hook({ session_id: 's1' });
+
+      assert.ok(!hook({ session_id: 's2' }).systemMessage.includes('fit no workstream'));
+    });
+
+    it('shows at most two invitations', () => {
+      decisions('search filters', 10);
+      const docs = Array.from({ length: 6 }, (_, i) => `- 11:0${i} DOC: testing — rule ${i}`).join('\n');
+      fs.appendFileSync(path.join(ctx.memoryDir, 'notes', `${day(1)}.md`), `${docs}\n`);
+      fs.mkdirSync(path.join(ctx.memoryDir, 'parked'), { recursive: true });
+      fs.writeFileSync(path.join(ctx.memoryDir, 'parked', 'old.md'), `---\nname: Old\ncategory: parked\nparked: ${day(40)}\n---\nx`);
+
+      const lines = hook({ session_id: 's' }).systemMessage.split('\n').filter(l => l.startsWith('💡'));
+
+      assert.equal(lines.length, 2);
+      assert.ok(lines[0].includes('DOC notes waiting'));
+    });
+
+    it('gives the model the card index and asks to keep cards current', () => {
       fs.writeFileSync(path.join(ctx.memoryDir, 'workstreams.json'), JSON.stringify({ viewer: ['viewer'] }));
       fs.mkdirSync(path.join(ctx.memoryDir, 'workstreams'), { recursive: true });
       fs.writeFileSync(path.join(ctx.memoryDir, 'workstreams', 'viewer.md'),
         '---\nname: viewer\ndescription: Read-only viewer over memory\ntype: project\n---\nbody');
 
-      const output = run({ session_id: 's' }, ctx);
+      const context = hook({ session_id: 's' }).hookSpecificOutput.additionalContext;
 
-      assert.ok(output.includes('Cards: viewer — Read-only viewer over memory'));
-      assert.ok(output.includes('offer to update its card'));
-      assert.ok(!output.includes('--mark-reviewed'));
+      assert.ok(context.includes('Workstream cards: viewer — Read-only viewer over memory'));
+      assert.ok(context.includes('offer to update its card'));
     });
 
-    it('flags a card the decisions have outrun', () => {
+    it('tells the user a card is behind', () => {
       fs.writeFileSync(path.join(ctx.memoryDir, 'workstreams.json'), JSON.stringify({ viewer: ['viewer'] }));
       fs.mkdirSync(path.join(ctx.memoryDir, 'workstreams'), { recursive: true });
       fs.writeFileSync(path.join(ctx.memoryDir, 'workstreams', 'viewer.md'),
         `---\nname: viewer\ndescription: Viewer\nmodified: ${day(20)}T12:00:00.000Z\n---\nbody`);
       decisions('viewer', 6);
 
-      const context = JSON.parse(run({ session_id: 's' }, ctx)).hookSpecificOutput.additionalContext;
-
-      assert.ok(context.includes('The "viewer" card is behind: 6 decisions'), context);
+      assert.ok(hook({ session_id: 's' }).systemMessage.includes('"viewer" card is 6 decisions behind'));
     });
   });
 
