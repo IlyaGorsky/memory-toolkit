@@ -68,6 +68,9 @@ function incrementHits(filePath) {
         if (!fmMatch) return; // no frontmatter, skip
 
         const fmBlock = fmMatch[1];
+        // Another tool's file (origin: opencode, …) is not ours to rewrite
+        const origin = fmBlock.match(/^\s*origin:\s*(\S+)/m);
+        if (origin && origin[1] !== ORIGIN) return;
         const today = new Date().toISOString().slice(0, 10);
 
         // CC's Write/Edit stamper moves top-level keys under `metadata:`, so
@@ -226,4 +229,8 @@ function rebuildIndex(content, schema, getFileWeight, discovered = []) {
     return sections.map(s => s.lines.join('\n')).join('\n');
 }
 
-module.exports = { loadSchema, calculateWeight, incrementHits, parseSections, rebuildIndex };
+// Frontmatter `origin` of the files MT writes — the convention tools sharing CC's
+// memory folder use to tell whose file is whose
+const ORIGIN = 'memory-toolkit';
+
+module.exports = { loadSchema, calculateWeight, incrementHits, parseSections, rebuildIndex, ORIGIN };

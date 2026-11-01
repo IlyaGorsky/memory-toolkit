@@ -37,7 +37,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const { loadSchema, calculateWeight, incrementHits, rebuildIndex } = require('./lib/weight');
+const { loadSchema, calculateWeight, incrementHits, rebuildIndex, ORIGIN } = require('./lib/weight');
 const log = require('./lib/log');
 
 // Resolve memory dir: --dir=<path> → symlink location (memory/memory.js → plugin)
@@ -313,7 +313,7 @@ function note(...words) {
     if (fs.existsSync(filePath)) {
         fs.appendFileSync(filePath, entry);
     } else {
-        const header = `---\nname: Notes ${today}\ndescription: Session notes ${today}\ntype: project\n---\n\n# ${today}\n\n`;
+        const header = `---\nname: Notes ${today}\ndescription: Session notes ${today}\ntype: project\norigin: memory-toolkit\n---\n\n# ${today}\n\n`;
         fs.writeFileSync(filePath, header + entry);
     }
 
@@ -1388,11 +1388,12 @@ function currentBranch() {
     }
 }
 
-// The key CC's stamper puts on memory files a session writes; ours carry it too,
-// so the session receipt sees everything the session left.
+// Every file MT writes says so (`origin`, as other tools sharing the folder do), and
+// carries originSessionId — the key CC's stamper puts on files a session writes — so
+// the session receipt sees everything the session left.
 function sessionStamp() {
     const id = process.env.CLAUDE_CODE_SESSION_ID;
-    return id ? { originSessionId: id } : {};
+    return { origin: ORIGIN, ...(id && { originSessionId: id }) };
 }
 
 // Sets frontmatter keys in place — top-level, or the copy CC's stamper moved under metadata:.

@@ -448,6 +448,7 @@ describe('memory.js', () => {
       assert.ok(out.includes('workstreams/viewer.md'));
       const printed = run('card viewer');
       assert.ok(printed.includes('category: workstream'));
+      assert.ok(printed.includes('origin: memory-toolkit'));
       assert.ok(printed.includes('modified:'));
       assert.ok(printed.includes('Read-only viewer'));
     });

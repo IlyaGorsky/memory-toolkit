@@ -240,7 +240,7 @@ function saveFindings(findings) {
     if (fs.existsSync(notePath)) {
       fs.appendFileSync(notePath, '\n' + entries + '\n');
     } else {
-      fs.writeFileSync(notePath, `---\nname: Notes ${today}\ndescription: Session notes ${today}\ntype: project\n---\n\n# ${today}\n\n${entries}\n`);
+      fs.writeFileSync(notePath, `---\nname: Notes ${today}\ndescription: Session notes ${today}\ntype: project\norigin: memory-toolkit\n---\n\n# ${today}\n\n${entries}\n`);
     }
     return;
   }

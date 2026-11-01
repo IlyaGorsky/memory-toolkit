@@ -45,6 +45,7 @@ const snapshot = `---
 name: Pre-compact snapshot
 description: Auto-saved at ${now}
 type: project
+origin: memory-toolkit
 ---
 
 ## Pre-compact snapshot: ${now}
@@ -79,7 +80,7 @@ try {
   if (fs.existsSync(notePath)) {
     fs.appendFileSync(notePath, entry);
   } else {
-    fs.writeFileSync(notePath, `---\nname: Notes ${today}\ndescription: Session notes ${today}\ntype: project\n---\n\n# ${today}\n\n${entry}`);
+    fs.writeFileSync(notePath, `---\nname: Notes ${today}\ndescription: Session notes ${today}\ntype: project\norigin: memory-toolkit\n---\n\n# ${today}\n\n${entry}`);
   }
 } catch (err) {
   log.info('pre-compact note not saved', { path: notePath, error: err.code || err.message });

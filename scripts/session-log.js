@@ -46,7 +46,7 @@ const entry = `- ${time} SESSION_START uuid:${sessionId} branch:${branch}${trans
 if (fs.existsSync(notePath)) {
   fs.appendFileSync(notePath, entry);
 } else {
-  fs.writeFileSync(notePath, `---\nname: Notes ${today}\ndescription: Session notes ${today}\ntype: project\n---\n\n# ${today}\n\n${entry}`);
+  fs.writeFileSync(notePath, `---\nname: Notes ${today}\ndescription: Session notes ${today}\ntype: project\norigin: memory-toolkit\n---\n\n# ${today}\n\n${entry}`);
 }
 
 // Also write session index for quick lookup (deduplicate by session_id)

@@ -278,6 +278,20 @@ describe('weight.js', () => {
         });
     });
 
+    describe('incrementHits and other tools', () => {
+        it('leaves a file another tool wrote untouched, counts ours', () => {
+            writeFile('reference/theirs.md', '---\nname: theirs\nmetadata:\n  origin: opencode\n---\nx');
+            writeFile('reference/ours.md', '---\nname: ours\norigin: memory-toolkit\n---\nx');
+            const theirs = fs.readFileSync(path.join(TMP, 'reference', 'theirs.md'), 'utf8');
+
+            incrementHits(path.join(TMP, 'reference', 'theirs.md'));
+            incrementHits(path.join(TMP, 'reference', 'ours.md'));
+
+            assert.equal(fs.readFileSync(path.join(TMP, 'reference', 'theirs.md'), 'utf8'), theirs);
+            assert.ok(fs.readFileSync(path.join(TMP, 'reference', 'ours.md'), 'utf8').includes('hits: 1'));
+        });
+    });
+
     describe('integration: reindex finds new files', () => {
         it('a memory file missing from MEMORY.md gets its line', () => {
             writeFile('MEMORY.md', '# Memory\n\n## Feedback\n- [Old](feedback/old.md) — old\n');
