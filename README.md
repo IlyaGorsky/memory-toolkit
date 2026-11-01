@@ -69,9 +69,13 @@ memory-toolkit saves the session.
 
 - **Session lifecycle** — start, continue, end. Handoff between sessions so you pick up where you left off, not from scratch.
 - **Workstreams** — group related memory by project area. Switch context without losing it.
-- **Background watcher** — runs on Haiku every 3 minutes, extracts corrections, decisions, and plans from your live transcript into `notes/` as `WATCH:` entries. Raw observations you can see.
+- **Workstream cards** — each workstream (a task, an experiment, an area) can keep a living card, `workstreams/<name>.md`: what it is, why, what it doesn't do, where results live, what's open. Claude offers to update it when its topic comes up and drafts it from the decisions already logged — you confirm.
+- **Parking** — `/park` sets an idea, a task or a question aside with its context, one file per item, so it comes back when the topic does. A parked item has an exit: picked up, moved to the backlog, or dropped.
+- **Background watcher** — after a turn, in the background (Claude never waits for it), at most every 3 minutes: Haiku extracts corrections, decisions, and plans from your live transcript into `notes/` as `WATCH:` entries. Raw observations you can see.
 - **Docs pipeline** — two separate streams. Watcher observes automatically. When you notice something rule-worthy, mark it explicitly with `DOC:` notation. At `/session-end`, docs-reflect collects your `DOC:` notes and routes them to `.claude/rules/<domain>.md` with your confirmation. You decide what becomes a rule.
-- **Model recommendations** — `/session-start` suggests Opus/Sonnet/Haiku per task type. Right model, right cost.
+- **Honest session start** — the handoff comes with its age and the branch it was written on, so an old one doesn't pass for the last session. At most two 💡 lines invite you to what's worth doing — update a card, run `/docs-reflect`, sort old parked items — and the same invitation doesn't come back for two weeks.
+- **Session receipt** — `/session-end` opens with what the session already left: memory files it wrote, decisions and DOC notes logged, commits, the workstreams it moved and whether their cards kept up.
+- **Model recommendations** — `/session-start` suggests the model per task as the command to type (`/model sonnet`). Right model, right cost.
 - **Session length nudge** — when the topic shifts mid-session, Claude gently suggests `/session-end`. Semantic signal, not a timer. Save context when a logical unit of work is done — not when compaction forces it.
 - **Memory API** — search, filter, query memory from any skill or hook. No vector DB, no external dependencies.
 
@@ -92,31 +96,32 @@ For deeper architectural context — layered model, what's inherited from CC vs 
  ┌─────────────────────────────────────────────────────────────┘
  │
  │  SessionStart hook
- │    session-log.js: log session, inject handoff, health check
+ │    session-log.js: log session, inject handoff (dated, branch),
+ │    card index, health check; 💡 up to two invitations for you
  │
- │  PostToolUse hook (every tool call)
- │    session-watcher.js — every 3 min, 6+ new messages:
+ │  Stop hook (after each turn, in the background)
+ │    session-watcher.js — every 3 min at most, 6+ new messages:
  │    transcript → Haiku → corrections, decisions, plans, docs
  │    phase detection (planning → implementation → review → debug)
- │    nudge /reflect after 8 findings, /docs-reflect after 3 DOC
  │
  │  PostToolUse hook (git commit)
  │    COMMIT: <message> → notes/<today>.md
  │
- │  SubagentStop hook
+ │  SubagentStop hook (named subagents, in the background)
  │    session-watcher.js — same, for subagent turns
  │
  │  PreCompact hook
  │    session-save.js: auto-save branch, commit, uncommitted
  │
- │  /park — save idea    /memory — search, list, query
+ │  /park — set aside    /memory — search, cards, parked, receipt
  │
  └──────────────────────────────┐
                                 ▼
  ~/.claude/projects/<project>/memory/
  ├ MEMORY.md                     ← index (loaded every session)
  ├ workstreams/handoff.md        ← global handoff (last session, any workstream)
- ├ workstreams/<name>/handoff.md ← per-workstream handoff, routed by /session-end
+ ├ workstreams/<name>.md         ← workstream card, kept current during work
+ ├ workstreams/<name>/           ← its handoff and parked items
  ├ notes/<today>.md              ← daily notes (auto + manual)
  ├ feedback/ decisions/ reference/
  ├ sessions.jsonl                ← session ID index
@@ -138,13 +143,13 @@ flowchart TB
     subgraph WORK ["You work here"]
         direction TB
 
-        H1["<b>SessionStart hook</b><br/>session-log.js: log session,<br/>inject handoff, health check"]
+        H1["<b>SessionStart hook</b><br/>session-log.js: log session, dated handoff,<br/>card index, health check · 💡 invitations"]
 
-        H2["<b>PostToolUse hook</b> · every tool call<br/>session-watcher.js (every 3 min, 6+ msgs):<br/>transcript → Haiku → corrections, decisions, plans, docs<br/>phase detection · nudge /reflect after 8 · /docs-reflect after 3"]
+        H2["<b>Stop hook</b> · after each turn, in the background<br/>session-watcher.js (every 3 min, 6+ msgs):<br/>transcript → Haiku → corrections, decisions, plans, docs<br/>phase detection"]
 
         H3["<b>PostToolUse hook</b> · git commit<br/>COMMIT: message → notes/today.md"]
 
-        H4["<b>SubagentStop hook</b><br/>session-watcher.js for subagent turns"]
+        H4["<b>SubagentStop hook</b><br/>session-watcher.js for named subagents"]
 
         H5["<b>PreCompact hook</b><br/>session-save.js: branch, commit, uncommitted"]
 
@@ -154,6 +159,7 @@ flowchart TB
     end
 
     subgraph END_ ["/session-end"]
+        E0["Receipt — what the session left"]
         E1["Save handoff"]
         E2["/reflect"]
         E3["/docs-reflect"]
@@ -162,7 +168,7 @@ flowchart TB
     subgraph STORAGE ["~/.claude/projects/&lt;project&gt;/memory/"]
         direction LR
         F1["MEMORY.md — index"]
-        F2["workstreams/handoff.md"]
+        F2["workstreams/ — handoffs, cards, parked"]
         F3["notes/ · feedback/ · decisions/"]
         F4["sessions.jsonl · .watcher-state.json"]
     end
@@ -204,10 +210,10 @@ handoff.md is written only by /session-end — the hook never overwrites it.
 
 ### Use case 2: Background watcher captures decisions automatically
 
-While you work, `session-watcher` runs every 3 minutes in the background:
+While you work, `session-watcher` runs after a turn, in the background, at most every 3 minutes — Claude never waits for it:
 
 ```text
-PostToolUse hook fires
+Stop hook fires after a turn (async)
       │
       ▼
 session-watcher reads new transcript messages (min 6 new messages)
@@ -227,6 +233,7 @@ The watcher runs your own `claude` CLI in the background (`claude -p --safe-mode
 
 ```text
 Mon  /session-start auth-refactor
+       ├── reads workstreams/auth.md — the card: what it is, what's open
        ├── loads decisions/auth-token-format.md
        ├── loads feedback/no-mocks-in-tests.md
        └── /session-end ──→ workstreams/auth/handoff.md (routed by activity)
@@ -316,12 +323,15 @@ SessionStart hook (fires automatically)
 ├── feedback/            ← corrections, confirmed approaches
 ├── decisions/           ← architectural choices with reasoning
 ├── reference/           ← external links, dashboards
-├── notes/               ← daily notes (auto: hooks + watcher + /park)
+├── notes/               ← daily notes (auto: hooks + watcher)
 ├── profile/             ← (optional) user role, preferences
+├── parked/              ← parked items that belong to no workstream
 └── workstreams/
     ├── handoff.md       ← global handoff (last session, any workstream)
+    ├── <name>.md        ← workstream card: what it is, why, what's open
     └── <name>/
-        └── handoff.md   ← per-workstream handoff, written by /session-end
+        ├── handoff.md   ← per-workstream handoff, written by /session-end
+        └── <item>.md    ← parked items of this workstream
 ```
 
 All files are markdown. Human-readable, git-friendly, portable.
@@ -330,12 +340,12 @@ All files are markdown. Human-readable, git-friendly, portable.
 
 | Skill | What it does |
 |-------|-------------|
-| `/session-start` | Cold start — load context, show status, model recommendation per task |
+| `/session-start` | Cold start — load context and the workstream card, show status, model per task as `/model …` |
 | `/session-continue` | Resume a workstream from where you left off |
-| `/session-end` | Handoff → reflect → docs-reflect cascade, confirmation at each step |
+| `/session-end` | Receipt of what the session left → handoff (carries over what's still open) → reflect → docs-reflect, confirmation at each step |
 | `/memory` | Search, list, query memory files. Auto-initializes on first use |
 | `/memory-setup` | Initialize or upgrade memory for a project |
-| `/park` | Save an idea for later without losing the thought |
+| `/park` | Set an idea, task or question aside with its context; `parked` / `unpark` to come back or let go |
 | `/reflect` | Session reflection — workarounds, gaps, insights → backlog.md |
 | `/session-insights` | Extract patterns from .jsonl session backups |
 | `/session-restore` | Recover context from past sessions, search transcripts |
@@ -347,10 +357,10 @@ All skills available with namespace prefix: `/memory-toolkit:session-start`, etc
 
 | Event | Action |
 |-------|--------|
-| **SessionStart** | Log session, inject handoff context, run memory health check, display DOC: reminder |
+| **SessionStart** | Log session, inject the handoff (with its age and branch) and the card index, run memory health check, show up to two 💡 invitations, DOC: reminder |
 | **PostToolUse** (git commit) | Log commits to daily notes |
-| **PostToolUse** (all tools) | Background watcher — extract decisions/corrections/docs via Haiku, detect phase, suggest /reflect |
-| **SubagentStop** | Same watcher for subagent turns |
+| **Stop** (async) | Background watcher after each turn — extract decisions/corrections/docs via Haiku, detect phase |
+| **SubagentStop** (async) | Same watcher for named subagent turns |
 | **PreCompact** | Auto-save session state (branch, commit, uncommitted files) before compaction |
 
 ## How it compares
@@ -489,7 +499,7 @@ Yes. The CLI (`node memory.js …`) works standalone — hooks are a convenience
 ### Does it slow down my session?
 
 - `session-log` / `session-save` — typically under 150 ms (500 ms budget)
-- `session-watcher` — throttled to once per 3 min, runs async, never blocks
+- `session-watcher` — runs after a turn in the background (`async`), at most once per 3 min; Claude never waits for it
 - `pipeline-hint` — disabled by default
 
 Invisible in practice on a modern laptop.
