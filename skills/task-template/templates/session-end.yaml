@@ -24,6 +24,7 @@ phases:
     description: Build proposed handoff content from session context + git + memory
     steps:
       - run: "git status --short; git log --oneline -5"
+      - description: "Read the handoff being replaced (node \"${CLAUDE_PLUGIN_ROOT}/scripts/memory.js\" handoff): carry over its What's next items this session didn't do or drop and its Session decisions that still hold; What was done / Where we stopped cover this session only"
       - description: |
           Assemble handoff.md content:
             ## Last session: YYYY-MM-DD

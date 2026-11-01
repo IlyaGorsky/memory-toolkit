@@ -61,6 +61,14 @@ Routing analysis:
 
 **MUST show the proposed handoff content to the user and wait for confirmation before writing.**
 
+First read the handoff it replaces:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" handoff
+```
+
+The new one is a snapshot, not a log: "What was done" and "Where we stopped" describe this session only. But carry over the old "What's next" items this session didn't do or drop, and the old "Session decisions" that still hold — otherwise they are lost. Drop the ones the session finished or overturned, and say which in the proposal.
+
 Prepare `workstreams/handoff.md` content:
 
 ```markdown
