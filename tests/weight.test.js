@@ -258,6 +258,40 @@ describe('weight.js', () => {
             assert.ok(rebuilt.includes('## API'));
             assert.ok(rebuilt.includes('node memory.js'));
         });
+
+        it('adds files found on disk to their section, once', () => {
+            const schema = loadSchema(null);
+            const content = ['# Memory', '', '## Rules', '- rule', '', '## Feedback', '- [Old](feedback/old.md) — old'].join('\n');
+            const discovered = [
+                { path: 'feedback/old.md', section: 'Feedback', line: '- [Old again](feedback/old.md) — dup' },
+                { path: 'feedback/new.md', section: 'Feedback', line: '- [New](feedback/new.md) — new' },
+                { path: 'reference/x.md', section: 'Reference', line: '- [X](reference/x.md) — no section here' },
+                { path: 'feedback/r.md', section: 'Rules', line: '- [R](feedback/r.md) — protected' },
+            ];
+
+            const rebuilt = rebuildIndex(content, schema, p => (p === 'feedback/new.md' ? 5 : 1), discovered);
+
+            assert.ok(rebuilt.indexOf('[New](feedback/new.md)') < rebuilt.indexOf('[Old](feedback/old.md)'));
+            assert.ok(!rebuilt.includes('Old again'));
+            assert.ok(!rebuilt.includes('reference/x.md'));
+            assert.ok(!rebuilt.includes('feedback/r.md'));
+        });
+    });
+
+    describe('integration: reindex finds new files', () => {
+        it('a memory file missing from MEMORY.md gets its line', () => {
+            writeFile('MEMORY.md', '# Memory\n\n## Feedback\n- [Old](feedback/old.md) — old\n');
+            writeFile('feedback/old.md', '---\nname: Old\ndescription: old\ntype: feedback\n---\nx');
+            writeFile('feedback/new-rule.md', '---\nname: New rule\ndescription: what it says\ntype: feedback\n---\nx');
+            writeFile('notes/2026-11-01.md', '---\nname: Notes\n---\n- 10:00 x');
+
+            const out = run('reindex');
+
+            assert.ok(out.includes('1 new file(s) added'), out);
+            const md = fs.readFileSync(path.join(TMP, 'MEMORY.md'), 'utf8');
+            assert.ok(md.includes('- [New rule](feedback/new-rule.md) — what it says'));
+            assert.ok(!md.includes('notes/2026-11-01.md'));
+        });
     });
 
     describe('integration: search increments hits', () => {

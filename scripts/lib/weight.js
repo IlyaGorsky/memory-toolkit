@@ -158,9 +158,20 @@ function parseSections(content, schema) {
  * @param {function} getFileWeight - (relativePath) => number
  * @returns {string} new MEMORY.md content
  */
-function rebuildIndex(content, schema, getFileWeight) {
+function rebuildIndex(content, schema, getFileWeight, discovered = []) {
     const maxLines = schema.max_lines || 200;
     const sections = parseSections(content, schema);
+
+    // Files on disk the index doesn't list yet go into their section, then compete
+    // for the budget like the rest — reindex used to only re-sort what was there.
+    const indexed = new Set(sections.flatMap(s => s.entries.map(e => e.path)));
+    for (const file of discovered) {
+        const section = sections.find(s => s.name === file.section && !s.protected);
+        if (!section || indexed.has(file.path)) continue;
+        section.lines.push(file.line);
+        section.entries.push({ line: file.line, path: file.path, lineIndex: section.lines.length - 1 });
+        indexed.add(file.path);
+    }
 
     // Sort entries within evictable sections by weight
     for (const section of sections) {

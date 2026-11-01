@@ -612,8 +612,23 @@ function reindex() {
         }
     }
 
+    // Durable memory only: notes, cards and parked items reach the session other ways
+    const sectionFor = { feedback: 'Feedback', reference: 'Reference', decisions: 'Backlog', project: 'Backlog' };
+    const discovered = getAllFiles()
+        .filter(f => sectionFor[f.name.split(/[\\/]/)[0]])
+        .map(f => {
+            const rel = f.name.split(path.sep).join('/');
+            const title = (f.frontmatter.name || path.basename(rel, '.md')).replace(/^"(.*)"$/, '$1');
+            const desc = (f.frontmatter.description || '').replace(/^"(.*)"$/, '$1');
+            const short = desc.length > 150 ? `${desc.slice(0, 149)}…` : desc;
+            return { path: rel, section: sectionFor[rel.split('/')[0]], line: `- [${title}](${rel})${short ? ` — ${short}` : ''}` };
+        });
+
+    const headings = Object.fromEntries((schema.sections || []).map(s => [s.name, s.heading]));
+    const added = discovered.filter(d => !content.includes(`](${d.path})`)
+        && content.split('\n').some(l => l.trimEnd() === headings[d.section])).length;
     const linesBefore = content.split('\n').length;
-    const rebuilt = rebuildIndex(content, schema, getFileWeight);
+    const rebuilt = rebuildIndex(content, schema, getFileWeight, discovered);
     const linesAfter = rebuilt.split('\n').length;
 
     // Atomic write
@@ -621,8 +636,8 @@ function reindex() {
     fs.writeFileSync(tmp, rebuilt, 'utf-8');
     fs.renameSync(tmp, memoryMdPath);
 
-    const evicted = linesBefore - linesAfter;
-    console.log(`Reindexed MEMORY.md: ${linesAfter} lines${evicted > 0 ? ` (${evicted} low-weight entries evicted)` : ''}`);
+    const evicted = linesBefore + added - linesAfter;
+    console.log(`Reindexed MEMORY.md: ${linesAfter} lines${added > 0 ? `, ${added} new file(s) added` : ''}${evicted > 0 ? ` (${evicted} low-weight entries evicted)` : ''}`);
 }
 
 // --- Health check ---
