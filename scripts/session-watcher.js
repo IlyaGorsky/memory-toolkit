@@ -6,7 +6,10 @@
  * Reads the active transcript, sends new messages to Haiku for analysis,
  * and saves findings (corrections, decisions, plans) to memory.
  *
- * Called by PostToolUse hook. Self-throttles to avoid running too often.
+ * Called by the Stop and SubagentStop hooks with `async: true`: once per turn, and
+ * the agent never waits for it (on PostToolUse its LLM call held a tool up to
+ * 144 s). Async output would reach the model, not the user, so it prints nothing;
+ * the user sees findings at the next session start. Self-throttles.
  *
  * State stored in: <memoryDir>/.watcher-state.json
  * Findings saved via: memory.js note "WATCH: ..."
@@ -23,8 +26,6 @@ const log = require('./lib/log');
 const THROTTLE_MS = 3 * 60 * 1000; // run at most every 3 minutes
 const MIN_NEW_MESSAGES = 6;          // need at least 6 new messages to analyze
 const MODEL = 'claude-haiku-5-5';
-const SUGGEST_REFLECT_THRESHOLD = 8;  // suggest /reflect after N accumulated findings
-const SUGGEST_DOCS_THRESHOLD = 3;     // suggest /docs-reflect after N DOC findings
 const TAIL_BYTES = 4 * 1024 * 1024;   // read at most the transcript's last 4 MB per run
 const MAX_MESSAGES = 40;              // analyze only the newest messages
 
@@ -35,7 +36,7 @@ let statePath = '';
 
 function loadState() {
   try { return JSON.parse(fs.readFileSync(statePath, 'utf8')); }
-  catch { return { byteOffset: null, lastRun: 0, transcriptPath: '', findingsCount: 0, docCount: 0, suggestedReflect: false, suggestedDocs: false, parseErrors: 0, cliErrors: 0, lastParseError: null }; }
+  catch { return { byteOffset: null, lastRun: 0, transcriptPath: '', findingsCount: 0, docCount: 0, parseErrors: 0, cliErrors: 0, lastParseError: null }; }
 }
 
 function saveState(state) {
@@ -43,7 +44,7 @@ function saveState(state) {
 }
 
 // --- Find transcript path ---
-// Primary: from PostToolUse stdin payload (public hook contract).
+// Primary: from the hook's stdin payload (public hook contract).
 // Fallback: from sessions.jsonl (for backwards compat / manual runs).
 function findTranscript() {
   if (stdinPayload.transcript_path) return stdinPayload.transcript_path;
@@ -288,6 +289,9 @@ async function main() {
     log.debug('watcher throttled', { elapsed: now - state.lastRun, threshold: THROTTLE_MS });
     exitJson();
   }
+  // Claim the run before the LLM call: an async run can outlast the turn, and the
+  // next Stop must see it in the throttle rather than analyze the same messages.
+  saveState({ ...state, lastRun: now });
 
   // Find transcript
   const transcriptPath = findTranscript();
@@ -304,8 +308,6 @@ async function main() {
   // Carry over counters (reset on new session)
   let findingsCount = newSession ? 0 : (state.findingsCount || 0);
   let docCount = newSession ? 0 : (state.docCount || 0);
-  let suggestedReflect = newSession ? false : (state.suggestedReflect || false);
-  let suggestedDocs = newSession ? false : (state.suggestedDocs || false);
 
   // Current phase (updated after LLM call)
   let currentPhase = newSession ? null : (state.phase || null);
@@ -324,8 +326,6 @@ async function main() {
     transcriptPath,
     findingsCount,
     docCount,
-    suggestedReflect,
-    suggestedDocs,
     phase: currentPhase,
     parseErrors,
     cliErrors,
@@ -372,27 +372,9 @@ async function main() {
 
     const summary = findings.map(f => `${f.type}: ${f.summary}`).join('; ');
     log.info('watcher findings', { count: findings.length, total: findingsCount, docTotal: docCount, summary });
-
-    // Build output message
-    let msg = `[memory-toolkit watcher] ${findings.length} finding(s) saved`;
-
-    // Suggest /docs-reflect when DOC findings accumulate
-    if (docCount >= SUGGEST_DOCS_THRESHOLD && !suggestedDocs) {
-      msg += ` | 💡 ${docCount} documentation findings this session — consider /docs-reflect`;
-      suggestedDocs = true;
-    }
-    // Suggest /reflect when total findings accumulate
-    else if (findingsCount >= SUGGEST_REFLECT_THRESHOLD && !suggestedReflect) {
-      msg += ` | 💡 ${findingsCount} findings this session — consider /reflect`;
-      suggestedReflect = true;
-    }
-
-    persistState();
-    exitJson({ systemMessage: msg });
-  } else {
-    persistState();
-    exitJson();
   }
+  persistState();
+  exitJson();
 }
 
 // --- Exports for testing ---

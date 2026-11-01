@@ -33,24 +33,27 @@
             "if": "Bash(git commit*)"
           }
         ]
-      },
+      }
+    ],
+    "Stop": [
       {
-        "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-watcher.js\""
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-watcher.js\"",
+            "async": true
           }
         ]
       }
     ],
     "SubagentStop": [
       {
-        "matcher": "",
+        "matcher": ".+",
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-watcher.js\""
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-watcher.js\"",
+            "async": true
           }
         ]
       }

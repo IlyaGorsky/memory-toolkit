@@ -321,10 +321,24 @@ describe('session-watcher.js', () => {
         fs.writeFileSync(path.join(memoryDir, '.watcher-state.json'),
           JSON.stringify({ offset: 0, lastRun: 0, transcriptPath: '' }));
         const r = runHook('session-watcher.js', JSON.stringify({
-          session_id: 'stdin-test', hook_event_name: 'PostToolUse',
-          transcript_path: transcriptPath, tool_name: 'Bash',
+          session_id: 'stdin-test', hook_event_name: 'Stop',
+          transcript_path: transcriptPath,
         }), { env: { HOME: home, PATH: '/nonexistent' }, cwd: projectDir });
         assert.equal(r.exitCode, 0, r.stderr);
+      });
+    });
+
+    it('claims lastRun before analysing, prints nothing (async output would go to the model)', () => {
+      withSandbox(({ home, memoryDir, projectDir, sandboxRoot }) => {
+        const transcriptPath = writeTranscript(sandboxRoot, 'claim', 10);
+        const statePath = path.join(memoryDir, '.watcher-state.json');
+        fs.writeFileSync(statePath, JSON.stringify({ lastRun: 0, transcriptPath: '' }));
+        const before = Date.now();
+        const r = runHook('session-watcher.js', JSON.stringify({ session_id: 'claim', hook_event_name: 'Stop', transcript_path: transcriptPath }),
+          { env: { HOME: home, PATH: '/nonexistent' }, cwd: projectDir });
+        assert.equal(r.exitCode, 0, r.stderr);
+        assert.ok(JSON.parse(fs.readFileSync(statePath, 'utf8')).lastRun >= before);
+        assert.deepEqual(JSON.parse(r.stdout.trim() || '{}'), {});
       });
     });
   });

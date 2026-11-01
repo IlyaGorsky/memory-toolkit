@@ -50,7 +50,6 @@ function createSandbox({ withPriorSession = false } = {}) {
     fs.writeFileSync(path.join(memoryDir, '.watcher-state.json'), JSON.stringify({
       offset: 0, lastRun: 0, transcriptPath: '',
       findingsCount: 0, docCount: 0,
-      suggestedReflect: false, suggestedDocs: false,
       parseErrors: 0, lastParseError: null,
     }));
   }

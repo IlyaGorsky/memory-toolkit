@@ -281,7 +281,6 @@ describe('e2e: isolated sandbox', () => {
       fs.writeFileSync(wStatePath, JSON.stringify({
         offset: 0, lastRun: 0, transcriptPath: '',
         findingsCount: 5, docCount: 1, phase: 'planning',
-        suggestedReflect: false, suggestedDocs: false,
       }));
 
       // Run watcher (LLM will fail, but state should be persisted)
@@ -303,8 +302,6 @@ describe('e2e: isolated sandbox', () => {
       assert.ok('findingsCount' in state, 'state should have findingsCount');
       assert.ok('docCount' in state, 'state should have docCount');
       assert.ok('phase' in state, 'state should have phase');
-      assert.ok('suggestedReflect' in state, 'state should have suggestedReflect');
-      assert.ok('suggestedDocs' in state, 'state should have suggestedDocs');
     });
 
     it('resets counters on new session (transcript change)', () => {
@@ -332,7 +329,6 @@ describe('e2e: isolated sandbox', () => {
         offset: 50, lastRun: 0,
         transcriptPath: '/old/transcript.jsonl', // different path → new session
         findingsCount: 10, docCount: 5, phase: 'review',
-        suggestedReflect: true, suggestedDocs: true,
       }));
 
       try {
@@ -351,8 +347,6 @@ describe('e2e: isolated sandbox', () => {
       // New session → counters should be reset
       assert.equal(state.findingsCount, 0, 'findingsCount should reset on new session');
       assert.equal(state.docCount, 0, 'docCount should reset on new session');
-      assert.equal(state.suggestedReflect, false, 'suggestedReflect should reset');
-      assert.equal(state.suggestedDocs, false, 'suggestedDocs should reset');
       assert.equal(state.phase, null, 'phase should reset on new session');
       assert.equal(state.byteOffset, fs.statSync(newTranscript).size, 'offset should start from 0 for new transcript');
     });
@@ -374,9 +368,9 @@ describe('e2e: isolated sandbox', () => {
       // Reset state
       fs.writeFileSync(wStatePath, JSON.stringify({ offset: 0, lastRun: 0, transcriptPath: '' }));
 
-      // Pass transcript_path via stdin (simulating PostToolUse hook payload)
+      // Pass transcript_path via stdin (simulating the Stop hook payload)
       const stdinPayload = JSON.stringify({
-        hook_event_name: 'PostToolUse',
+        hook_event_name: 'Stop',
         session_id: 'stdin-test',
         transcript_path: stdinTranscript,
         tool_name: 'Bash',
@@ -424,6 +418,20 @@ describe('e2e: isolated sandbox', () => {
       assert.ok(events.includes('SessionStart'), 'should have SessionStart');
       assert.ok(events.includes('SubagentStop'), 'should have SubagentStop');
       assert.ok(events.includes('UserPromptSubmit'), 'should have UserPromptSubmit');
+      assert.ok(events.includes('Stop'), 'should have Stop');
+    });
+
+    it('watcher runs async on Stop and named subagents, never per tool', () => {
+      const hooksJson = JSON.parse(
+        fs.readFileSync(path.join(PLUGIN_ROOT, 'hooks', 'hooks.json'), 'utf8')
+      );
+      const watcher = h => h.command.includes('session-watcher');
+      const stop = hooksJson.hooks.Stop.flatMap(g => g.hooks).find(watcher);
+      assert.equal(stop.async, true);
+      const sub = hooksJson.hooks.SubagentStop.find(g => g.hooks.some(watcher));
+      assert.equal(sub.matcher, '.+');
+      assert.ok(sub.hooks.every(h => h.async === true));
+      assert.ok(!hooksJson.hooks.PostToolUse.flatMap(g => g.hooks).some(watcher), 'no per-tool watcher');
     });
 
     it('UserPromptSubmit hook runs pipeline-hint', () => {
