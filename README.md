@@ -500,7 +500,6 @@ Yes. The CLI (`node memory.js …`) works standalone — hooks are a convenience
 
 - `session-log` / `session-save` — typically under 150 ms (500 ms budget)
 - `session-watcher` — runs after a turn in the background (`async`), at most once per 3 min; Claude never waits for it
-- `pipeline-hint` — disabled by default
 
 Invisible in practice on a modern laptop.
 

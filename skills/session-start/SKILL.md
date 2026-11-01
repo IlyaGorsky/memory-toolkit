@@ -3,8 +3,6 @@ name: session-start
 description: Cold session start — context, status, focus. Use at the beginning of each new session.
 user-invocable: true
 argument-hint: "[workstream]"
-metadata:
-  pipeline: true
 allowed-tools:
   - Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" *)
 ---

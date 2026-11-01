@@ -3,8 +3,6 @@ name: session-end
 description: Session completion — handoff, reflect, docs-reflect cascade.
 user-invocable: true
 argument-hint: ""
-metadata:
-  pipeline: true
 allowed-tools:
   - Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/memory.js" *)
 ---
